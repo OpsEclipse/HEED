@@ -1,0 +1,4 @@
+module whisper_cpp {
+    umbrella "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/checkouts/SwiftWhisper/Sources/whisper_cpp/include"
+    export *
+}

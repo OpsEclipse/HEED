@@ -9,9 +9,13 @@ import SwiftUI
 
 @main
 struct heedApp: App {
+    private let controller = RecordingController(
+        demoMode: ProcessInfo.processInfo.arguments.contains("--heed-ui-test")
+    )
+
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            ContentView(controller: controller)
         }
     }
 }

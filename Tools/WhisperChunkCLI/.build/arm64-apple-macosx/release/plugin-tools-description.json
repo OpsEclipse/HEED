@@ -1,0 +1,597 @@
+{
+  "builtTestProducts" : [
+
+  ],
+  "copyCommands" : {
+
+  },
+  "explicitTargetDependencyImportCheckingMode" : {
+    "none" : {
+
+    }
+  },
+  "generatedSourceTargetSet" : [
+
+  ],
+  "pluginDescriptions" : [
+
+  ],
+  "swiftCommands" : {
+    "C.SwiftWhisper-arm64-apple-macosx26.0-release.module" : {
+      "executable" : "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "fileList" : "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/arm64-apple-macosx/release/SwiftWhisper.build/sources",
+      "importPath" : "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/arm64-apple-macosx/release/Modules",
+      "inputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/checkouts/SwiftWhisper/Sources/SwiftWhisper/Segment.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/checkouts/SwiftWhisper/Sources/SwiftWhisper/Whisper.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/checkouts/SwiftWhisper/Sources/SwiftWhisper/WhisperDelegate.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/checkouts/SwiftWhisper/Sources/SwiftWhisper/WhisperError.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/checkouts/SwiftWhisper/Sources/SwiftWhisper/WhisperLanguage.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/checkouts/SwiftWhisper/Sources/SwiftWhisper/WhisperParams.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/checkouts/SwiftWhisper/Sources/SwiftWhisper/WhisperSamplingStrategy.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/arm64-apple-macosx/release/swift-version--58304C5D6DBC2206.txt"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/arm64-apple-macosx/release/whisper_cpp.build/coreml/whisper-encoder-impl.m.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/arm64-apple-macosx/release/whisper_cpp.build/coreml/whisper-encoder.mm.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/arm64-apple-macosx/release/whisper_cpp.build/ggml.c.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/arm64-apple-macosx/release/whisper_cpp.build/whisper.cpp.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/arm64-apple-macosx/release/SwiftWhisper.build/sources"
+        }
+      ],
+      "isLibrary" : true,
+      "moduleName" : "SwiftWhisper",
+      "moduleOutputPath" : "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/arm64-apple-macosx/release/Modules/SwiftWhisper.swiftmodule",
+      "objects" : [
+        "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/arm64-apple-macosx/release/SwiftWhisper.build/Segment.swift.o",
+        "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/arm64-apple-macosx/release/SwiftWhisper.build/Whisper.swift.o",
+        "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/arm64-apple-macosx/release/SwiftWhisper.build/WhisperDelegate.swift.o",
+        "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/arm64-apple-macosx/release/SwiftWhisper.build/WhisperError.swift.o",
+        "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/arm64-apple-macosx/release/SwiftWhisper.build/WhisperLanguage.swift.o",
+        "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/arm64-apple-macosx/release/SwiftWhisper.build/WhisperParams.swift.o",
+        "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/arm64-apple-macosx/release/SwiftWhisper.build/WhisperSamplingStrategy.swift.o"
+      ],
+      "otherArguments" : [
+        "-target",
+        "arm64-apple-macosx10.13",
+        "-whole-module-optimization",
+        "-num-threads",
+        "10",
+        "-serialize-diagnostics",
+        "-O",
+        "-j10",
+        "-DSWIFT_PACKAGE",
+        "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+        "-Xcc",
+        "-fmodule-map-file=/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/arm64-apple-macosx/release/whisper_cpp.build/module.modulemap",
+        "-Xcc",
+        "-I",
+        "-Xcc",
+        "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/checkouts/SwiftWhisper/Sources/whisper_cpp/include",
+        "-module-cache-path",
+        "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/arm64-apple-macosx/release/ModuleCache",
+        "-parseable-output",
+        "-parse-as-library",
+        "-emit-objc-header",
+        "-emit-objc-header-path",
+        "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/arm64-apple-macosx/release/SwiftWhisper.build/include/SwiftWhisper-Swift.h",
+        "-swift-version",
+        "5",
+        "-plugin-path",
+        "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+        "-sdk",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+        "-F",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-F",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+        "-I",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-L",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-g",
+        "-Xcc",
+        "-isysroot",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+        "-Xcc",
+        "-F",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-Xcc",
+        "-F",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+        "-Xcc",
+        "-fPIC",
+        "-Xcc",
+        "-g",
+        "-suppress-warnings"
+      ],
+      "outputFileMapPath" : "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/arm64-apple-macosx/release/SwiftWhisper.build/output-file-map.json",
+      "outputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/arm64-apple-macosx/release/SwiftWhisper.build/Segment.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/arm64-apple-macosx/release/SwiftWhisper.build/Whisper.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/arm64-apple-macosx/release/SwiftWhisper.build/WhisperDelegate.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/arm64-apple-macosx/release/SwiftWhisper.build/WhisperError.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/arm64-apple-macosx/release/SwiftWhisper.build/WhisperLanguage.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/arm64-apple-macosx/release/SwiftWhisper.build/WhisperParams.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/arm64-apple-macosx/release/SwiftWhisper.build/WhisperSamplingStrategy.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/arm64-apple-macosx/release/Modules/SwiftWhisper.swiftmodule"
+        }
+      ],
+      "prepareForIndexing" : false,
+      "sources" : [
+        "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/checkouts/SwiftWhisper/Sources/SwiftWhisper/Segment.swift",
+        "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/checkouts/SwiftWhisper/Sources/SwiftWhisper/Whisper.swift",
+        "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/checkouts/SwiftWhisper/Sources/SwiftWhisper/WhisperDelegate.swift",
+        "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/checkouts/SwiftWhisper/Sources/SwiftWhisper/WhisperError.swift",
+        "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/checkouts/SwiftWhisper/Sources/SwiftWhisper/WhisperLanguage.swift",
+        "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/checkouts/SwiftWhisper/Sources/SwiftWhisper/WhisperParams.swift",
+        "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/checkouts/SwiftWhisper/Sources/SwiftWhisper/WhisperSamplingStrategy.swift"
+      ],
+      "tempsPath" : "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/arm64-apple-macosx/release/SwiftWhisper.build",
+      "wholeModuleOptimization" : true
+    },
+    "C.WhisperChunkCLI-arm64-apple-macosx26.0-release.module" : {
+      "executable" : "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "fileList" : "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/arm64-apple-macosx/release/WhisperChunkCLI.build/sources",
+      "importPath" : "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/arm64-apple-macosx/release/Modules",
+      "inputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/Sources/WhisperChunkCLI/main.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/arm64-apple-macosx/release/swift-version--58304C5D6DBC2206.txt"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/arm64-apple-macosx/release/Modules/SwiftWhisper.swiftmodule"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/arm64-apple-macosx/release/WhisperChunkCLI.build/sources"
+        }
+      ],
+      "isLibrary" : false,
+      "moduleName" : "WhisperChunkCLI",
+      "moduleOutputPath" : "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/arm64-apple-macosx/release/Modules/WhisperChunkCLI.swiftmodule",
+      "objects" : [
+        "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/arm64-apple-macosx/release/WhisperChunkCLI.build/main.swift.o"
+      ],
+      "otherArguments" : [
+        "-target",
+        "arm64-apple-macosx14.0",
+        "-whole-module-optimization",
+        "-num-threads",
+        "10",
+        "-serialize-diagnostics",
+        "-O",
+        "-j10",
+        "-DSWIFT_PACKAGE",
+        "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+        "-Xcc",
+        "-fmodule-map-file=/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/arm64-apple-macosx/release/whisper_cpp.build/module.modulemap",
+        "-Xcc",
+        "-I",
+        "-Xcc",
+        "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/checkouts/SwiftWhisper/Sources/whisper_cpp/include",
+        "-module-cache-path",
+        "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/arm64-apple-macosx/release/ModuleCache",
+        "-parseable-output",
+        "-Xfrontend",
+        "-entry-point-function-name",
+        "-Xfrontend",
+        "WhisperChunkCLI_main",
+        "-parse-as-library",
+        "-swift-version",
+        "6",
+        "-plugin-path",
+        "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+        "-sdk",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+        "-F",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-F",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+        "-I",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-L",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-g",
+        "-Xcc",
+        "-isysroot",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+        "-Xcc",
+        "-F",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-Xcc",
+        "-F",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+        "-Xcc",
+        "-fPIC",
+        "-Xcc",
+        "-g",
+        "-package-name",
+        "whisperchunkcli"
+      ],
+      "outputFileMapPath" : "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/arm64-apple-macosx/release/WhisperChunkCLI.build/output-file-map.json",
+      "outputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/arm64-apple-macosx/release/WhisperChunkCLI.build/main.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/arm64-apple-macosx/release/Modules/WhisperChunkCLI.swiftmodule"
+        }
+      ],
+      "prepareForIndexing" : false,
+      "sources" : [
+        "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/Sources/WhisperChunkCLI/main.swift"
+      ],
+      "tempsPath" : "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/arm64-apple-macosx/release/WhisperChunkCLI.build",
+      "wholeModuleOptimization" : true
+    }
+  },
+  "swiftFrontendCommands" : {
+
+  },
+  "swiftTargetScanArgs" : {
+    "SwiftWhisper" : [
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "-module-name",
+      "SwiftWhisper",
+      "-c",
+      "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/checkouts/SwiftWhisper/Sources/SwiftWhisper/Segment.swift",
+      "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/checkouts/SwiftWhisper/Sources/SwiftWhisper/Whisper.swift",
+      "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/checkouts/SwiftWhisper/Sources/SwiftWhisper/WhisperDelegate.swift",
+      "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/checkouts/SwiftWhisper/Sources/SwiftWhisper/WhisperError.swift",
+      "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/checkouts/SwiftWhisper/Sources/SwiftWhisper/WhisperLanguage.swift",
+      "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/checkouts/SwiftWhisper/Sources/SwiftWhisper/WhisperParams.swift",
+      "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/checkouts/SwiftWhisper/Sources/SwiftWhisper/WhisperSamplingStrategy.swift",
+      "-I",
+      "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/arm64-apple-macosx/release/Modules",
+      "-target",
+      "arm64-apple-macosx10.13",
+      "-whole-module-optimization",
+      "-num-threads",
+      "10",
+      "-serialize-diagnostics",
+      "-O",
+      "-j10",
+      "-DSWIFT_PACKAGE",
+      "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+      "-Xcc",
+      "-fmodule-map-file=/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/arm64-apple-macosx/release/whisper_cpp.build/module.modulemap",
+      "-Xcc",
+      "-I",
+      "-Xcc",
+      "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/checkouts/SwiftWhisper/Sources/whisper_cpp/include",
+      "-module-cache-path",
+      "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/arm64-apple-macosx/release/ModuleCache",
+      "-parseable-output",
+      "-parse-as-library",
+      "-emit-objc-header",
+      "-emit-objc-header-path",
+      "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/arm64-apple-macosx/release/SwiftWhisper.build/include/SwiftWhisper-Swift.h",
+      "-swift-version",
+      "5",
+      "-plugin-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+      "-sdk",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+      "-F",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-F",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+      "-I",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-L",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-g",
+      "-Xcc",
+      "-isysroot",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+      "-Xcc",
+      "-F",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-Xcc",
+      "-F",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+      "-Xcc",
+      "-fPIC",
+      "-Xcc",
+      "-g",
+      "-suppress-warnings",
+      "-driver-use-frontend-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"
+    ],
+    "WhisperChunkCLI" : [
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "-module-name",
+      "WhisperChunkCLI",
+      "-package-name",
+      "whisperchunkcli",
+      "-c",
+      "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/Sources/WhisperChunkCLI/main.swift",
+      "-I",
+      "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/arm64-apple-macosx/release/Modules",
+      "-target",
+      "arm64-apple-macosx14.0",
+      "-whole-module-optimization",
+      "-num-threads",
+      "10",
+      "-serialize-diagnostics",
+      "-O",
+      "-j10",
+      "-DSWIFT_PACKAGE",
+      "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+      "-Xcc",
+      "-fmodule-map-file=/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/arm64-apple-macosx/release/whisper_cpp.build/module.modulemap",
+      "-Xcc",
+      "-I",
+      "-Xcc",
+      "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/checkouts/SwiftWhisper/Sources/whisper_cpp/include",
+      "-module-cache-path",
+      "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/arm64-apple-macosx/release/ModuleCache",
+      "-parseable-output",
+      "-Xfrontend",
+      "-entry-point-function-name",
+      "-Xfrontend",
+      "WhisperChunkCLI_main",
+      "-parse-as-library",
+      "-swift-version",
+      "6",
+      "-plugin-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+      "-sdk",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+      "-F",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-F",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+      "-I",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-L",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-g",
+      "-Xcc",
+      "-isysroot",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+      "-Xcc",
+      "-F",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-Xcc",
+      "-F",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+      "-Xcc",
+      "-fPIC",
+      "-Xcc",
+      "-g",
+      "-package-name",
+      "whisperchunkcli",
+      "-driver-use-frontend-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"
+    ]
+  },
+  "targetDependencyMap" : {
+    "SwiftWhisper" : [
+      "whisper_cpp"
+    ],
+    "WhisperChunkCLI" : [
+      "SwiftWhisper",
+      "whisper_cpp"
+    ],
+    "whisper_cpp" : [
+
+    ]
+  },
+  "testDiscoveryCommands" : {
+
+  },
+  "testEntryPointCommands" : {
+
+  },
+  "traitConfiguration" : {
+    "default" : {
+
+    }
+  },
+  "writeCommands" : {
+    "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/arm64-apple-macosx/release/SwiftWhisper.build/sources" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<sources-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/checkouts/SwiftWhisper/Sources/SwiftWhisper/Segment.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/checkouts/SwiftWhisper/Sources/SwiftWhisper/Whisper.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/checkouts/SwiftWhisper/Sources/SwiftWhisper/WhisperDelegate.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/checkouts/SwiftWhisper/Sources/SwiftWhisper/WhisperError.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/checkouts/SwiftWhisper/Sources/SwiftWhisper/WhisperLanguage.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/checkouts/SwiftWhisper/Sources/SwiftWhisper/WhisperParams.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/checkouts/SwiftWhisper/Sources/SwiftWhisper/WhisperSamplingStrategy.swift"
+        }
+      ],
+      "outputFilePath" : "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/arm64-apple-macosx/release/SwiftWhisper.build/sources"
+    },
+    "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/arm64-apple-macosx/release/WhisperChunkCLI.build/sources" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<sources-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/Sources/WhisperChunkCLI/main.swift"
+        }
+      ],
+      "outputFilePath" : "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/arm64-apple-macosx/release/WhisperChunkCLI.build/sources"
+    },
+    "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/arm64-apple-macosx/release/WhisperChunkCLI.product/Objects.LinkFileList" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<link-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/arm64-apple-macosx/release/SwiftWhisper.build/Segment.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/arm64-apple-macosx/release/SwiftWhisper.build/Whisper.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/arm64-apple-macosx/release/SwiftWhisper.build/WhisperDelegate.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/arm64-apple-macosx/release/SwiftWhisper.build/WhisperError.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/arm64-apple-macosx/release/SwiftWhisper.build/WhisperLanguage.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/arm64-apple-macosx/release/SwiftWhisper.build/WhisperParams.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/arm64-apple-macosx/release/SwiftWhisper.build/WhisperSamplingStrategy.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/arm64-apple-macosx/release/WhisperChunkCLI.build/main.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/arm64-apple-macosx/release/whisper_cpp.build/coreml/whisper-encoder-impl.m.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/arm64-apple-macosx/release/whisper_cpp.build/coreml/whisper-encoder.mm.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/arm64-apple-macosx/release/whisper_cpp.build/ggml.c.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/arm64-apple-macosx/release/whisper_cpp.build/whisper.cpp.o"
+        }
+      ],
+      "outputFilePath" : "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/arm64-apple-macosx/release/WhisperChunkCLI.product/Objects.LinkFileList"
+    },
+    "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/arm64-apple-macosx/release/swift-version--58304C5D6DBC2206.txt" : {
+      "alwaysOutOfDate" : true,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<swift-get-version>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"
+        }
+      ],
+      "outputFilePath" : "/Users/sparshah/Documents/projects/xcode/heed/Tools/WhisperChunkCLI/.build/arm64-apple-macosx/release/swift-version--58304C5D6DBC2206.txt"
+    }
+  }
+}

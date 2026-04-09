@@ -100,6 +100,7 @@
 			buildConfigurationList = 6C87A3102F87375800021693 /* Build configuration list for PBXNativeTarget "heed" */;
 			buildPhases = (
 				6C87A2EB2F87375700021693 /* Sources */,
+				6C87A3192F87375900021693 /* Bundle Whisper Assets */,
 				6C87A2EC2F87375700021693 /* Frameworks */,
 				6C87A2ED2F87375700021693 /* Resources */,
 			);
@@ -231,6 +232,29 @@
 		};
 /* End PBXResourcesBuildPhase section */
 
+/* Begin PBXShellScriptBuildPhase section */
+		6C87A3192F87375900021693 /* Bundle Whisper Assets */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Bundle Whisper Assets";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/Helpers/WhisperChunkCLI",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Models/ggml-base.en.bin",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -euo pipefail\n\nPACKAGE_PATH=\"$SRCROOT/Tools/WhisperChunkCLI\"\nMODEL_URL=\"https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin\"\nMODEL_CACHE_DIR=\"$DERIVED_FILE_DIR/WhisperAssets\"\nMODEL_CACHE_PATH=\"$MODEL_CACHE_DIR/ggml-base.en.bin\"\nHELPER_OUTPUT_DIR=\"$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Helpers\"\nHELPER_DEST=\"$HELPER_OUTPUT_DIR/WhisperChunkCLI\"\nMODEL_OUTPUT_DIR=\"$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/Models\"\nMODEL_DEST=\"$MODEL_OUTPUT_DIR/ggml-base.en.bin\"\n\nmkdir -p \"$MODEL_CACHE_DIR\" \"$HELPER_OUTPUT_DIR\" \"$MODEL_OUTPUT_DIR\"\n\nif [ ! -f \"$MODEL_CACHE_PATH\" ]; then\n  /usr/bin/curl --fail --location --output \"$MODEL_CACHE_PATH\" \"$MODEL_URL\"\nfi\n\n/usr/bin/env swift build --package-path \"$PACKAGE_PATH\" -c release\nHELPER_BIN_PATH=$(/usr/bin/env swift build --package-path \"$PACKAGE_PATH\" -c release --show-bin-path)/WhisperChunkCLI\n\n/usr/bin/install -m 755 \"$HELPER_BIN_PATH\" \"$HELPER_DEST\"\n/usr/bin/install -m 644 \"$MODEL_CACHE_PATH\" \"$MODEL_DEST\"\n\nif [ -n \"${EXPANDED_CODE_SIGN_IDENTITY:-}\" ]; then\n  /usr/bin/codesign --force --sign \"$EXPANDED_CODE_SIGN_IDENTITY\" --timestamp=none \"$HELPER_DEST\"\nfi\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
 /* Begin PBXSourcesBuildPhase section */
 		6C87A2EB2F87375700021693 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
@@ -307,7 +331,7 @@
 				DEVELOPMENT_TEAM = 9MD8QT5M4X;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GCC_DYNAMIC_NO_PIC = NO;
 				GCC_NO_COMMON_BLOCKS = YES;
@@ -323,7 +347,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MACOSX_DEPLOYMENT_TARGET = 26.2;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -371,7 +395,7 @@
 				DEVELOPMENT_TEAM = 9MD8QT5M4X;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
@@ -381,7 +405,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MACOSX_DEPLOYMENT_TARGET = 26.2;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = macosx;
@@ -394,6 +418,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = heed/heed.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
@@ -401,13 +426,17 @@
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
-				ENABLE_USER_SELECTED_FILES = readonly;
+				ENABLE_USER_SELECTED_FILES = readwrite;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSAudioCaptureUsageDescription = "Heed needs system audio capture to transcribe other people in the meeting.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Heed needs microphone access to transcribe what you say in the meeting.";
+				INFOPLIST_KEY_NSScreenCaptureUsageDescription = "Heed needs screen and system audio capture to transcribe meeting audio from your Mac.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = sprsh.ca.heed;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -426,6 +455,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = heed/heed.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
@@ -433,13 +463,17 @@
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
-				ENABLE_USER_SELECTED_FILES = readonly;
+				ENABLE_USER_SELECTED_FILES = readwrite;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSAudioCaptureUsageDescription = "Heed needs system audio capture to transcribe other people in the meeting.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Heed needs microphone access to transcribe what you say in the meeting.";
+				INFOPLIST_KEY_NSScreenCaptureUsageDescription = "Heed needs screen and system audio capture to transcribe meeting audio from your Mac.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = sprsh.ca.heed;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -461,7 +495,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 9MD8QT5M4X;
 				GENERATE_INFOPLIST_FILE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 26.2;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = sprsh.ca.heedTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -482,7 +516,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 9MD8QT5M4X;
 				GENERATE_INFOPLIST_FILE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 26.2;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = sprsh.ca.heedTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
