@@ -16,6 +16,7 @@ struct heedApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView(controller: controller)
+                .preferredColorScheme(.dark)
         }
         .defaultSize(width: 1280, height: 840)
         .windowStyle(.hiddenTitleBar)

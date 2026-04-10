@@ -10,7 +10,7 @@ The app still has one main macOS window today.
 - The sessions list is in a hidden-by-default left sidebar column with a compact tree-style treatment.
 - The main record or stop action lives in one floating yellow button.
 - The window opens at a fixed default size and hides the normal macOS title bar controls.
-- The bottom utility rail shows quiet status text plus `Copy as text` and `Full screen` actions.
+- The bottom utility rail shows quiet status text plus `Compile tasks`, `Copy as text`, and `Full screen` actions when the selected session is eligible for task review.
 - The controller still has `.txt` and `.md` file export code, but those file export actions are not surfaced in the current shell.
 
 ## Current Implemented States
@@ -25,6 +25,8 @@ The app still has one main macOS window today.
   The app keeps the same screen while it flushes pending work.
 - `error`
   The shell shows a blocked status. Detailed recovery text is tracked in the controller, but the refreshed shell does not render that full message yet. Partial transcripts still stay visible when they exist.
+- `post-transcript task review`
+  A completed transcript with real text can show an inline `Suggested tasks` appendix after the user clicks `Compile tasks`.
 
 ## Refresh Status
 
@@ -48,6 +50,8 @@ This is the default visual focus.
 - The transcript sits in a centered reading column.
 - Saved and live sessions use the same main reading surface.
 - When there is no transcript yet, the canvas shows only `Press record to begin the full transcript`.
+- When task review is present, it renders as one inline appendix below the transcript instead of replacing the screen.
+- Source jumps from the appendix scroll back to the matching transcript segment and briefly highlight it.
 
 ### Sidebar
 
@@ -76,7 +80,19 @@ The bottom rail stays visually quiet.
 - It sits flush with the bottom edge of the window.
 - It shows compact status text like recording state and elapsed time.
 - It keeps text-only actions on the right side.
-- It currently exposes `Copy as text` and a fullscreen toggle.
+- It exposes `Compile tasks` only for completed sessions with transcript text.
+- It keeps `Copy as text` and a fullscreen toggle visible beside that action.
+
+### Inline Task Review
+
+The transcript review flow stays in the same reading surface.
+
+- `Compile tasks` expands a collapsible `Suggested tasks` section below the transcript.
+- The section shows quiet status text while the local preview compiler is running.
+- `Tasks` appear first and support checkbox selection.
+- `Decisions` and `Follow-ups` stay collapsed by default and remain read-only.
+- Each row can use `Show source` to jump back to evidence in the transcript.
+- The current shipped build uses local fixture data for this UI path, so remote compilation and saved AI output are still planned.
 
 ## Current Interaction Pattern
 
@@ -90,6 +106,8 @@ The bottom rail stays visually quiet.
 8. The user can copy transcript text or toggle fullscreen from the bottom utility rail.
 9. The user stops recording from the same floating button.
 10. The finished transcript stays in place for review instead of switching to a different screen.
+11. If the finished transcript has usable text, the user can click `Compile tasks`.
+12. The review result opens inline below the transcript and keeps the transcript visible during loading, retry, and recompile states.
 
 ## Current UI Behavior
 
@@ -122,6 +140,8 @@ The bottom rail stays visually quiet.
 - Reuse the same transcript canvas.
 - Keep copy and fullscreen available in the bottom rail.
 - Let the sidebar support browsing without becoming the main focus.
+- Show `Compile tasks` only when the saved session is completed and has non-empty transcript text.
+- Keep the `Suggested tasks` appendix tied to the selected session instead of making it a global panel.
 
 ## Current Modules
 
@@ -131,6 +151,8 @@ These modules are now in code.
   Owns the high-level window layout.
 - `TranscriptCanvasView`
   Owns the main black canvas and centered reading column.
+- `TaskAnalysisSectionView`
+  Renders the inline `Suggested tasks` appendix inside the transcript column.
 - `SessionSidebarView`
   Shows session titles and selection state.
 - `UtilityRailView`
@@ -146,9 +168,11 @@ These modules are now in code.
 - A floating transport can block transcript text selection if it sits too low or too wide.
 - Extreme minimalism can remove useful feedback if status text becomes too faint.
 - Long transcripts can still feel heavy if the centered column is too wide or too cramped.
+- The inline task appendix can get dense if long evidence text or many items stack below the transcript.
 - Permission and error states still need to feel first-class, even inside a very quiet layout.
 - The controller stores richer error text than the current shell renders, so blocked recovery still feels under-explained on screen.
 - The current macOS UI automation around the transport state transition is still somewhat flaky.
+- Local macOS accessibility authorization can block UI automation before the new inline review path finishes running.
 - Session titles are derived from transcript text instead of stored session metadata, so the label rule should stay consistent until a real title field exists.
 - File export still exists below the UI, so the team should decide whether to surface it again or keep the shell intentionally copy-first.
 

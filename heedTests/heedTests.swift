@@ -189,4 +189,144 @@ struct heedTests {
         try? await Task.sleep(for: .milliseconds(50))
         try? FileManager.default.removeItem(at: rootURL)
     }
+
+    @Test func taskAnalysisFixtureCompilerBuildsDeterministicDraftFromSession() async throws {
+        let compiler = TaskAnalysisFixtureCompiler(mode: .success, delay: .milliseconds(0))
+        let result = try await compiler.compile(session: demoTranscriptSession())
+
+        #expect(result.tasks.count == 2)
+        #expect(result.tasks[0].title == "Verify the two-way audio path before the next session")
+        #expect(result.tasks[1].title == "Review the live source labels in the transcript")
+        #expect(result.decisions.count == 1)
+        #expect(result.followUps.count == 1)
+        #expect(result.warnings.first == "Preview only. This build keeps task compilation local while the OpenAI-backed compile path is still in progress.")
+    }
+
+    @Test func taskAnalysisControllerOnlyShowsCompileForFinishedSessionsWithText() async throws {
+        let controller = await MainActor.run {
+            TaskAnalysisController(compiler: TaskAnalysisFixtureCompiler(mode: .success, delay: .milliseconds(0)))
+        }
+
+        let recordingSession = makeSession(status: .recording, texts: ["Still recording"])
+        let emptyCompletedSession = makeSession(status: .completed, texts: ["   "])
+        let completedSession = makeSession(status: .completed, texts: ["Review the labels"])
+
+        await MainActor.run {
+            controller.updateDisplayedSession(recordingSession)
+        }
+        let recordingVisibility = await MainActor.run { controller.canShowCompileAction }
+
+        await MainActor.run {
+            controller.updateDisplayedSession(emptyCompletedSession)
+        }
+        let emptyVisibility = await MainActor.run { controller.canShowCompileAction }
+
+        await MainActor.run {
+            controller.updateDisplayedSession(completedSession)
+        }
+        let completedVisibility = await MainActor.run { controller.canShowCompileAction }
+
+        #expect(recordingVisibility == false)
+        #expect(emptyVisibility == false)
+        #expect(completedVisibility == true)
+    }
+
+    @Test func taskAnalysisControllerReachesCompiledNoTasksState() async throws {
+        let controller = await MainActor.run {
+            TaskAnalysisController(compiler: TaskAnalysisFixtureCompiler(mode: .empty, delay: .milliseconds(0)))
+        }
+
+        await MainActor.run {
+            controller.updateDisplayedSession(demoTranscriptSession())
+            controller.handleCompileAction()
+        }
+
+        let sectionModel = try await waitForTaskAnalysisSectionModel(controller)
+        #expect(sectionModel?.result?.tasks.isEmpty == true)
+        #expect(sectionModel?.result?.noTasksReason == "No clear tasks found")
+        let actionTitle = await MainActor.run { controller.compileActionTitle }
+        #expect(actionTitle == "Recompile")
+    }
+
+    @Test func taskAnalysisControllerSurfacesFailureStateAndRetryLabel() async throws {
+        let controller = await MainActor.run {
+            TaskAnalysisController(compiler: StubTaskAnalysisCompiler { _ in
+                throw StubTaskAnalysisError()
+            })
+        }
+
+        await MainActor.run {
+            controller.updateDisplayedSession(demoTranscriptSession())
+            controller.handleCompileAction()
+        }
+
+        let sectionModel = try await waitForTaskAnalysisSectionModel(controller)
+        #expect(sectionModel?.errorText == "Task analysis failed on purpose.")
+        let actionTitle = await MainActor.run { controller.compileActionTitle }
+        #expect(actionTitle == "Try again")
+    }
+}
+
+private struct StubTaskAnalysisCompiler: TaskAnalysisCompiling {
+    let operation: @Sendable (TranscriptSession) async throws -> TaskAnalysisResult
+
+    func compile(session: TranscriptSession) async throws -> TaskAnalysisResult {
+        try await operation(session)
+    }
+}
+
+private struct StubTaskAnalysisError: LocalizedError {
+    var errorDescription: String? {
+        "Task analysis failed on purpose."
+    }
+}
+
+private func waitForTaskAnalysisSectionModel(
+    _ controller: TaskAnalysisController,
+    attempts: Int = 20
+) async throws -> TaskAnalysisController.SectionModel? {
+    for _ in 0..<attempts {
+        let sectionModel = await MainActor.run { controller.sectionModel }
+        if sectionModel?.isCompiling != true {
+            return sectionModel
+        }
+        try await Task.sleep(for: .milliseconds(25))
+    }
+
+    return await MainActor.run { controller.sectionModel }
+}
+
+private func demoTranscriptSession() -> TranscriptSession {
+    TranscriptSession(
+        startedAt: Date(timeIntervalSince1970: 0),
+        endedAt: Date(timeIntervalSince1970: 10),
+        duration: 10,
+        status: .completed,
+        modelName: "ggml-base.en",
+        appVersion: "1.0",
+        segments: [
+            TranscriptSegment(source: .mic, startedAt: 1, endedAt: 2.4, text: "Can you hear me clearly on this side?"),
+            TranscriptSegment(source: .system, startedAt: 2, endedAt: 3.5, text: "Yes, the remote call audio is coming through."),
+            TranscriptSegment(source: .mic, startedAt: 4.2, endedAt: 5.8, text: "Perfect. Heed is showing separate live labels."),
+        ]
+    )
+}
+
+private func makeSession(status: TranscriptSessionStatus, texts: [String]) -> TranscriptSession {
+    TranscriptSession(
+        startedAt: Date(timeIntervalSince1970: 0),
+        endedAt: Date(timeIntervalSince1970: 12),
+        duration: 12,
+        status: status,
+        modelName: "ggml-base.en",
+        appVersion: "1.0",
+        segments: texts.enumerated().map { index, text in
+            TranscriptSegment(
+                source: index.isMultiple(of: 2) ? .mic : .system,
+                startedAt: TimeInterval(index),
+                endedAt: TimeInterval(index + 1),
+                text: text
+            )
+        }
+    )
 }

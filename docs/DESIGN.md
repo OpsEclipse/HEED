@@ -19,6 +19,7 @@ The shipped UI now leans minimalist with some brutalist leftovers.
 - The main record or stop control is one floating yellow button near the bottom.
 - The bottom utility rail is still present. It stays quiet and text-first.
 - Transcript rows are not boxed. They read as source-plus-time metadata followed by plain transcript text.
+- The post-transcript `Suggested tasks` review renders inline as one subdued panel below the transcript, not as a modal or side panel.
 
 ## Current Design Sources Of Truth
 
@@ -42,6 +43,7 @@ The shipped shell is a sparse, writer-like transcript screen:
 - a toggleable [can be shown or hidden] left sidebar column
 - one floating yellow record or stop button instead of a heavy header bar
 - one quiet bottom utility rail for status, copy, and fullscreen
+- one inline review appendix for suggested tasks after a transcript is complete
 
 We still want some brutalist energy. We just want less boxy noise and more calm focus.
 
@@ -54,6 +56,7 @@ The transcript should stay the hero [main focal point].
 - Keep the transcript in a centered column instead of stretching it edge to edge.
 - Keep line length readable. Aim for roughly `60` to `75` characters per line.
 - Let empty space do real work. Negative space [intentional empty space that improves focus] should make the screen feel calm, not unfinished.
+- When post-meeting review appears, treat it like an appendix under the transcript, not a new primary surface.
 
 ### 2. Empty State Copy
 
@@ -93,6 +96,16 @@ Keep the directness of the app, but remove extra framing.
 - No decorative gradients
 - Let the yellow record button stay the loudest element
 
+### 6. Review As Appendix
+
+The task review UI should feel attached to the transcript, like margin notes gathered into one block.
+
+- Keep it inline in the reading column.
+- Use one restrained panel surface so it reads as reviewed output, not live transcript text.
+- Put `Tasks` first because they are the actionable part.
+- Keep `Decisions` and `Follow-ups` collapsed by default so the appendix stays compact.
+- Use source jumps and brief transcript highlighting to connect the appendix back to the transcript evidence.
+
 ## Current Design System Rules
 
 ### Layout Primitives
@@ -109,6 +122,8 @@ These are the main building blocks in the current shell design.
   The one floating yellow record or stop button.
 - `UtilityRail`
   The quiet bottom status and action strip.
+- `TranscriptAppendix`
+  The inline task-review panel that appears below the transcript when task compilation is active or finished.
 
 ### Typography
 
@@ -153,6 +168,7 @@ Motion should support clarity.
 - The yellow button still needs a final pass against the exact reference spacing and shade.
 - Session labels are derived from transcript content, so empty or repetitive openings still need polish.
 - The sidebar toggle and quiet rail still need a discoverability [how easy something is to notice] pass so first-time users do not miss them.
+- The new review appendix needs one more polish pass on spacing and long-result density once real OpenAI-backed output lands.
 - UI automation coverage for the new shell still needs stabilization on macOS.
 
 ## Design Change Rule

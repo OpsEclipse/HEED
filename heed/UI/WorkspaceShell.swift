@@ -4,6 +4,7 @@ import SwiftUI
 
 struct WorkspaceShell: View {
     @ObservedObject var controller: RecordingController
+    @ObservedObject var taskAnalysisController: TaskAnalysisController
     @State private var isSidebarVisible = false
     @StateObject private var windowController = WorkspaceWindowController()
 
@@ -39,8 +40,14 @@ struct WorkspaceShell: View {
                             state: controller.state,
                             session: displayedSession,
                             segments: displayedSegments,
+                            sourceJumpRequest: taskAnalysisController.sourceJumpRequest,
+                            highlightedSegmentID: taskAnalysisController.highlightedSegmentID,
+                            appendixFocusNonce: taskAnalysisController.sectionFocusNonce,
                             autoScrollEnabled: $controller.autoScrollEnabled
-                        )
+                        ) {
+                            TaskAnalysisSectionView(controller: taskAnalysisController)
+                                .padding(.top, displayedSegments.isEmpty ? 6 : 16)
+                        }
 
                         SidebarToggleButton(isSidebarVisible: $isSidebarVisible)
                             .padding(.top, 20)
@@ -70,6 +77,18 @@ struct WorkspaceShell: View {
                     windowController.bind(to: window)
                 }
             }
+            .onAppear {
+                taskAnalysisController.updateDisplayedSession(displayedSession)
+            }
+            .onChange(of: displayedSession?.id) {
+                taskAnalysisController.updateDisplayedSession(displayedSession)
+            }
+            .onChange(of: displayedSession?.segments.count) {
+                taskAnalysisController.updateDisplayedSession(displayedSession)
+            }
+            .onChange(of: displayedSession?.status) {
+                taskAnalysisController.updateDisplayedSession(displayedSession)
+            }
         }
     }
 
@@ -89,7 +108,23 @@ struct WorkspaceShell: View {
     }
 
     private var utilityActions: [UtilityRailView.Action] {
-        [
+        var actions: [UtilityRailView.Action] = []
+
+        if let compileActionTitle = taskAnalysisController.compileActionTitle,
+           taskAnalysisController.canShowCompileAction {
+            actions.append(
+                .init(
+                    id: "compile",
+                    title: compileActionTitle,
+                    isEnabled: taskAnalysisController.isCompileActionEnabled,
+                    accessibilityIdentifier: "compile-tasks"
+                ) {
+                    taskAnalysisController.handleCompileAction()
+                }
+            )
+        }
+
+        actions.append(
             .init(
                 id: "copy",
                 title: "Copy as text",
@@ -97,7 +132,10 @@ struct WorkspaceShell: View {
                 accessibilityIdentifier: "copy-as-text"
             ) {
                 controller.copySelectedSession()
-            },
+            }
+        )
+
+        actions.append(
             .init(
                 id: "fullscreen",
                 title: windowController.isFullScreen ? "Exit full screen" : "Full screen",
@@ -105,7 +143,9 @@ struct WorkspaceShell: View {
             ) {
                 windowController.toggleFullScreen()
             }
-        ]
+        )
+
+        return actions
     }
 }
 

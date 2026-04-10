@@ -43,6 +43,10 @@ final class RecordingController: ObservableObject {
         state != .requestingPermissions && state != .stopping
     }
 
+    var isDemoModeEnabled: Bool {
+        demoMode
+    }
+
     var primaryButtonTitle: String {
         state == .recording ? "Stop" : "Record"
     }
