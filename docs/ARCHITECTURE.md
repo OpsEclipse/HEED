@@ -16,7 +16,7 @@ Heed is now a real macOS SwiftUI app with a first end-to-end local transcript pa
 - UI tests: [`../heedUITests/`](../heedUITests/)
 - Build settings: [`../heed.xcodeproj/project.pbxproj`](../heed.xcodeproj/project.pbxproj)
 
-The app now has a shared domain model, microphone capture, system-audio capture, chunking, a Whisper helper process, JSON persistence, export helpers, and demo-mode UI hooks for UI testing.
+The app now has a shared domain model, microphone capture, system-audio capture, speech-aware chunking, a Whisper helper process, JSON persistence, export helpers, and demo-mode UI hooks for UI testing.
 
 ## Folder Ownership
 
@@ -63,7 +63,7 @@ The current local meeting-transcript pipeline is:
 6. Session store
    Saves transcript sessions and keeps crash loss small.
 7. Export layer
-   Copies or writes transcript output as text or Markdown.
+   Builds clipboard, text-file, and Markdown-file transcript output. The refreshed shell currently surfaces clipboard copy, while file export still lives in the controller layer and is not wired into the current UI.
 
 ## Important Boundaries
 

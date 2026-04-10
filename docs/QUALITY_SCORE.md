@@ -8,18 +8,18 @@ These scores reflect the repo as it exists after the 2026-04-09 review pass. The
 
 - Product direction: `8/10`
   The product goal is clear and the active v1 plan is detailed.
-- Documentation: `7/10`
-  The docs are now mostly aligned, but they need steady upkeep as reliability work lands.
+- Documentation: `8/10`
+  The docs now describe the shipped shell and pipeline more honestly, but they still need steady upkeep as reliability work lands.
 - App shell: `8/10`
   The app now has a real recording workspace instead of the template shell.
 - Frontend implementation: `7/10`
-  The main transcript flow, session list, and export actions exist, but polish and richer recovery copy are still light.
+  The main transcript flow, session list, and copy flow exist, but polish, richer recovery copy, and the decision about visible file export are still open.
 - Audio capture: `6/10`
   Microphone and system-audio capture both exist, but device-change and long-run behavior still need more real-world checks.
 - Transcription: `7/10`
   Local Whisper transcription works through a bundled helper, but first-chunk latency and long-run stability still need more measurement.
 - Persistence and export: `8/10`
-  JSON autosave, recovery, clipboard copy, and text or Markdown export are all implemented.
+  JSON autosave, recovery, clipboard copy, and text or Markdown export code are all implemented, even though the refreshed shell only surfaces copy right now.
 - Test coverage: `5/10`
   There is real unit and UI coverage now, but capture-heavy paths still rely mostly on manual checks.
 - Release readiness: `5/10`
@@ -42,6 +42,7 @@ These scores reflect the repo as it exists after the 2026-04-09 review pass. The
 - Measure first-chunk and steady-state latency on supported Apple Silicon hardware.
 - Harden the build-time model download with explicit checksum verification in code.
 - Add more failure-path coverage around interrupted system-audio capture.
+- Decide whether `.txt` and `.md` export should return to the refreshed shell or stay controller-only.
 
 ## Re-Scoring Rule
 

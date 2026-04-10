@@ -12,7 +12,6 @@ struct WindowAccessView: NSViewRepresentable {
 
     func updateNSView(_ nsView: ResolverView, context: Context) {
         nsView.onResolve = onResolve
-        nsView.resolveWindowIfNeeded()
     }
 }
 

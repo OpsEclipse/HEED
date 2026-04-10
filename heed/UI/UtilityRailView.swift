@@ -5,6 +5,21 @@ struct UtilityRailView: View {
     let secondaryStatus: String?
     let details: [Detail]
     let actions: [Action]
+    let primaryControl: AnyView
+
+    init<PrimaryControl: View>(
+        primaryStatus: String,
+        secondaryStatus: String?,
+        details: [Detail],
+        actions: [Action],
+        @ViewBuilder primaryControl: () -> PrimaryControl
+    ) {
+        self.primaryStatus = primaryStatus
+        self.secondaryStatus = secondaryStatus
+        self.details = details
+        self.actions = actions
+        self.primaryControl = AnyView(primaryControl())
+    }
 
     var body: some View {
         ViewThatFits(in: .horizontal) {
@@ -23,17 +38,23 @@ struct UtilityRailView: View {
     }
 
     private var regularLayout: some View {
-        HStack(alignment: .center, spacing: 18) {
+        HStack(alignment: .center, spacing: 20) {
             statusBlock
                 .frame(maxWidth: .infinity, alignment: .leading)
 
+            primaryControl
+                .fixedSize()
+
             actionRow
+                .frame(maxWidth: .infinity, alignment: .trailing)
         }
     }
 
     private var compactLayout: some View {
         VStack(alignment: .leading, spacing: 14) {
             statusBlock
+            primaryControl
+                .frame(maxWidth: .infinity, alignment: .leading)
             compactActionColumn
         }
     }
@@ -87,7 +108,7 @@ struct UtilityRailView: View {
         }
         .buttonStyle(.plain)
         .disabled(!action.isEnabled)
-        .opacity(action.isEnabled ? 1 : 0.35)
+        .opacity(action.isEnabled ? 0.82 : 0.3)
         .accessibilityIdentifier(action.accessibilityIdentifier ?? action.id)
     }
 
@@ -173,10 +194,10 @@ extension UtilityRailView {
 }
 
 private enum UtilityRailPalette {
-    static let canvas = Color(red: 0.035, green: 0.035, blue: 0.035)
+    static let canvas = HeedTheme.ColorToken.canvas
     static let divider = Color.white.opacity(0.08)
-    static let primaryText = Color.white.opacity(0.70)
-    static let secondaryText = Color.white.opacity(0.36)
+    static let primaryText = Color.white.opacity(0.56)
+    static let secondaryText = Color.white.opacity(0.32)
     static let warningText = Color(red: 0.88, green: 0.67, blue: 0.36)
 }
 
@@ -192,7 +213,9 @@ private enum UtilityRailPalette {
         actions: [
             .init(id: "copy", title: "Copy as text") {}
         ]
-    )
+    ) {
+        FloatingTransportView(recordingState: .ready) { }
+    }
     .frame(width: 900)
     .background(Color.black)
 }
@@ -208,7 +231,9 @@ private enum UtilityRailPalette {
         actions: [
             .init(id: "copy", title: "Copy as text", isEnabled: false) {}
         ]
-    )
+    ) {
+        FloatingTransportView(recordingState: .recording) { }
+    }
     .frame(width: 360)
     .background(Color.black)
 }

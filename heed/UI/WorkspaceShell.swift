@@ -16,9 +16,7 @@ struct WorkspaceShell: View {
     }
 
     var body: some View {
-        GeometryReader { geometry in
-            let compactWidth = geometry.size.width < 820
-
+        GeometryReader { _ in
             VStack(spacing: 0) {
                 HStack(spacing: 0) {
                     if isSidebarVisible {
@@ -57,19 +55,16 @@ struct WorkspaceShell: View {
                     secondaryStatus: utilitySecondaryStatus,
                     details: utilityDetails,
                     actions: utilityActions
-                )
+                ) {
+                    FloatingTransportView(
+                        recordingState: controller.state,
+                        isEnabled: controller.canRecord,
+                        onPrimaryAction: controller.handlePrimaryAction
+                    )
+                }
             }
             .animation(.easeOut(duration: 0.22), value: isSidebarVisible)
             .background(HeedTheme.ColorToken.canvas.ignoresSafeArea())
-            .overlay(alignment: compactWidth ? .topTrailing : .bottom) {
-                FloatingTransportView(
-                    recordingState: controller.state,
-                    isEnabled: controller.canRecord,
-                    onPrimaryAction: controller.handlePrimaryAction
-                )
-                .padding(compactWidth ? .top : .bottom, compactWidth ? 20 : 78)
-                .padding(.trailing, compactWidth ? 20 : 0)
-            }
             .background {
                 WindowAccessView { window in
                     windowController.bind(to: window)
@@ -138,11 +133,19 @@ private final class WorkspaceWindowController: ObservableObject {
             installObservers(for: window)
         }
 
-        isFullScreen = window.styleMask.contains(.fullScreen)
+        updateFullScreenState(window.styleMask.contains(.fullScreen))
     }
 
     func toggleFullScreen() {
         window?.toggleFullScreen(nil)
+    }
+
+    private func updateFullScreenState(_ newValue: Bool) {
+        guard isFullScreen != newValue else {
+            return
+        }
+
+        isFullScreen = newValue
     }
 
     private func configure(_ window: NSWindow) {
@@ -169,7 +172,10 @@ private final class WorkspaceWindowController: ObservableObject {
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor in
-                self?.isFullScreen = true
+                guard let self else {
+                    return
+                }
+                self.updateFullScreenState(true)
             }
         }
 
@@ -179,7 +185,10 @@ private final class WorkspaceWindowController: ObservableObject {
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor in
-                self?.isFullScreen = false
+                guard let self else {
+                    return
+                }
+                self.updateFullScreenState(false)
             }
         }
     }

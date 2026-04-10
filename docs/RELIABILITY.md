@@ -66,7 +66,7 @@
 - Current confidence:
   Medium-high. `SessionStore` autosaves atomically on every new segment, recovers incomplete sessions on relaunch, and now deletes empty failed sessions so retries do not leave junk behind.
 - Best next step:
-  Autosave during recording and document migration [how old saved data becomes new saved data] before changing format.
+  Add save-failure coverage and document migration [how old saved data becomes new saved data] before changing format.
 
 ## Recording Control
 
@@ -77,7 +77,7 @@
 - Current confidence:
   Medium. The controller now stops the timer as soon as stop begins, keeps recording if only one source fails, and cleans up interrupted state so the next recording attempt is not blocked.
 - Best next step:
-  Manually test device changes, denied permissions, and one-source-only startup on a clean machine.
+  Manually test device changes, denied permissions, and one-source-only startup on a clean machine, then surface richer blocked or recovery text in the shell.
 
 ## Export
 
@@ -86,9 +86,9 @@
 - Main failure modes:
   Truncated output, incorrect ordering, overwritten files, unclear success state.
 - Current confidence:
-  Medium. Deterministic text and Markdown exports exist, plus clipboard copy.
+  Medium. Deterministic text and Markdown exporters exist, plus clipboard copy in the current shell. The file export paths still exist in the controller, but the refreshed UI does not surface them right now.
 - Best next step:
-  Make exported output deterministic [always producing the same result from the same input] and easy to preview.
+  Decide whether file export should return to the shell, then add a clearer success state for copy or file-save actions.
 
 ## Current Trust Summary
 
@@ -99,5 +99,5 @@ The repo is now trustworthy enough for a first end-to-end local path in developm
 - Add structured logging [consistent machine-readable logs] around permissions, capture start and stop, chunk delivery, and save events.
 - Keep short manual smoke tests [small real-world checks] for Zoom, Meet, and device switching.
 - Save known-good sample outputs during development.
-- Add crash-safe autosave before polishing export.
+- Keep crash-safe autosave and add more save-failure coverage before polishing export.
 - Write one long-run soak test [a test that runs for a long time to catch stability issues] once capture works.

@@ -1,13 +1,15 @@
 # Heed
 
-Heed is a planned macOS app for live meeting transcription. The intended product is simple: capture microphone audio and system audio, turn it into text on-device, and keep a durable session history you can review or export.
+Heed is a macOS app for local meeting transcription. It captures microphone audio and system audio, turns both into text on-device, and keeps a local session history you can review later.
 
-Today, the repo contains the first real v1 path. The app has a brutalist recording UI, local permission gating, source-specific audio pipelines, Whisper-backed local transcription through a bundled helper tool, JSON session autosave, relaunch recovery, and text or Markdown export.
+Today, the repo contains a real first v1 path. The app has a transcript-first window, a collapsible sessions sidebar, a floating record or stop button, local permission gating, source-specific audio pipelines, speech-aware chunking, Whisper-backed local transcription through a bundled helper tool, JSON session autosave, relaunch recovery, and clipboard copy. The code also still contains `.txt` and `.md` export paths, but the refreshed shell does not surface those file export actions yet.
 
 ## What Exists Today
 
 - App entry point: [`heed/heedApp.swift`](heed/heedApp.swift)
 - Root view: [`heed/ContentView.swift`](heed/ContentView.swift)
+- Main shell views: [`heed/UI/`](heed/UI/)
+- Recording control layer: [`heed/Controllers/RecordingController.swift`](heed/Controllers/RecordingController.swift)
 - Unit test target: [`heedTests/heedTests.swift`](heedTests/heedTests.swift)
 - UI test target: [`heedUITests/`](heedUITests/)
 - Xcode project settings: [`heed.xcodeproj/project.pbxproj`](heed.xcodeproj/project.pbxproj)
@@ -15,11 +17,12 @@ Today, the repo contains the first real v1 path. The app has a brutalist recordi
 Important current facts:
 
 - The app is a single `WindowGroup`.
-- The UI shows a sessions sidebar, live transcript timeline, export actions, and a large `Record` or `Stop` control.
+- The current shell is transcript-first. It centers the transcript, hides the sidebar by default, and keeps the main record or stop action in one compact floating button.
+- The bottom utility rail shows status, `Copy as text`, and a fullscreen toggle.
 - The project uses generated Info.plist values, not a checked-in `Info.plist`.
 - The app target deploys to macOS `14.0`.
 - App Sandbox [a macOS restriction layer] and Hardened Runtime [extra macOS runtime protections] are enabled.
-- A build step bundles `WhisperChunkCLI` and downloads `ggml-base.en.bin` into the app bundle so the installed app works offline.
+- A build step bundles `WhisperChunkCLI` and downloads `ggml-base.en.bin` into the app bundle so the installed app works offline after build and install.
 
 ## Run It
 
@@ -43,7 +46,7 @@ xcodebuild -list -project heed.xcodeproj
 
 Note:
 
-- The first build downloads the Whisper model from `https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin` and caches it in DerivedData [Xcode’s build-output folder].
+- The first build downloads the Whisper model from `https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin` and caches it in DerivedData [Xcode's build-output folder].
 
 ## Product Direction
 
@@ -52,8 +55,9 @@ The planned product path in this repo is:
 1. Keep permission handling and recovery clear.
 2. Improve real-world capture robustness across device changes.
 3. Tune first-chunk and steady-state Whisper latency.
-4. Add more manual smoke coverage for meeting apps.
-5. Harden recovery and interruption behavior.
+4. Decide whether file export actions return to the refreshed shell or stay controller-only for now.
+5. Add more manual smoke coverage for meeting apps.
+6. Harden recovery and interruption behavior.
 
 That direction is now captured in the docs set below so a new engineer does not need hidden chat context.
 
@@ -79,4 +83,5 @@ That direction is now captured in the docs set below so a new engineer does not 
 
 - Real-world audio route changes still need deeper manual coverage.
 - The bundled model is downloaded at build time, so source integrity checks rely on the recorded URL and checksum instead of a checked-in asset.
+- The refreshed shell exposes clipboard copy, but file export actions are not currently visible in the UI even though the export code still exists.
 - The app has automated tests, but it still needs more long-run capture validation outside demo mode.

@@ -7,7 +7,7 @@
 - Risk:
   The app can capture sensitive speech.
 - Current posture:
-  The app requests microphone access only when the user clicks `Record`, and the recording state is visible in the header.
+  The app requests microphone access only when the user clicks `Record`, and the recording state stays visible through the floating transport and bottom utility rail.
 - Guardrail:
   Ask only when the user is about to record, and make recording state obvious.
 
@@ -16,7 +16,7 @@
 - Risk:
   Screen-capture permission can grant access broader than users expect.
 - Current posture:
-  `ScreenCaptureKit` capture is implemented. The app now keeps the first-run state neutral until the user clicks `Record`, then shows blocked guidance if screen recording stays unavailable.
+  `ScreenCaptureKit` capture is implemented. The app keeps the first-run state neutral until the user clicks `Record`. If screen recording stays unavailable, the controller tracks a blocked message, but the current shell mostly exposes that state through status text instead of a richer recovery panel.
 - Guardrail:
   Explain clearly why the app needs this permission and never imply it captures less than it really does.
 
@@ -34,7 +34,7 @@
 - Risk:
   Copy or file export can move sensitive text into less trusted places.
 - Current posture:
-  Export exists as clear user actions: clipboard copy, `.txt`, and `.md`.
+  Clipboard copy is surfaced in the current shell. `.txt` and `.md` file export paths still exist in controller code, but they are not currently exposed in the refreshed UI.
 - Guardrail:
   Make export a clear user action, not an automatic side effect.
 

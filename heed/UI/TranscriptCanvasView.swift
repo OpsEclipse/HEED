@@ -36,7 +36,7 @@ private struct TranscriptScroller: View {
                     if segments.isEmpty {
                         Text(emptyTitle)
                             .font(.system(size: 18, weight: .regular, design: .default))
-                            .foregroundStyle(HeedTheme.ColorToken.textPrimary)
+                            .foregroundStyle(HeedTheme.ColorToken.textPrimary.opacity(0.6))
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.top, 24)
                             .accessibilityIdentifier("empty-state")

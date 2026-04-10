@@ -10,7 +10,7 @@
   The app now keeps first-run screen-capture guidance honest, but the recovery flow still relies on plain inline text instead of a richer guided walkthrough.
 
 - `Export feedback`
-  Export works, but the UI still does not show a clear success state after copy or file export.
+  Clipboard copy works, but the UI still does not show a clear success state, and the refreshed shell does not surface file export yet even though the export code still exists.
 
 - `Long-run observability`
   The app has very light logging today. Capture, chunking, and autosave would be easier to trust with structured logs [consistent machine-readable logs].

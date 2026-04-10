@@ -52,4 +52,4 @@ Use these heuristics [simple decision rules] when tradeoffs appear.
 
 ## Current Product Maturity
 
-The product idea is clear, but the implementation is still near zero. The docs should therefore guide decisions, not pretend the experience already exists.
+The product idea is clear and a first working local path now exists. The docs should describe what is shipped today, while still marking open reliability work and unsurfaced features clearly.

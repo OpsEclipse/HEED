@@ -17,7 +17,6 @@ struct FloatingTransportView: View {
 
     var body: some View {
         primaryButton
-            .accessibilityIdentifier("floating-transport")
     }
 
     private var primaryButton: some View {
@@ -63,8 +62,8 @@ private struct HeedTransportButtonStyle: ButtonStyle {
             .animation(HeedTheme.Motion.quick, value: configuration.isPressed)
     }
 
-    private var buttonShape: Rectangle {
-        Rectangle()
+    private var buttonShape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: 8, style: .continuous)
     }
 }
 

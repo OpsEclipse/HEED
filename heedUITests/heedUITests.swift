@@ -24,8 +24,12 @@ final class heedUITests: XCTestCase {
         XCTAssertTrue(app.buttons["copy-as-text"].exists)
         XCTAssertTrue(app.buttons["fullscreen-toggle"].exists)
 
-        app.buttons["sidebar-toggle"].click()
-        XCTAssertTrue(app.otherElements["session-sidebar"].waitForExistence(timeout: 2))
+        let sidebarToggle = app.buttons["sidebar-toggle"]
+        sidebarToggle.click()
+        for _ in 0..<20 where sidebarToggle.label != "Close" {
+            RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.1))
+        }
+        XCTAssertEqual(sidebarToggle.label, "Close")
 
         app.buttons["record-button"].click()
 

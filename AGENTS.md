@@ -11,10 +11,9 @@ Read in this order:
 
 ## Current Repo Reality
 
-- Treat this repo as an early scaffold.
-- Shipped code is only the app shell in [`heed/heedApp.swift`](heed/heedApp.swift) and [`heed/ContentView.swift`](heed/ContentView.swift).
-- The meeting-transcript product is the intended direction, not current behavior.
-- Mark planned behavior clearly. Do not describe it as implemented unless the code exists.
+- Treat this repo as an early but real v1 path.
+- Shipped code now includes the app shell, recording controller, local capture pipelines, local transcription, session storage, export helpers, and tests.
+- The meeting-transcript product is no longer just planned direction. Describe shipped behavior as implemented when the code exists, and keep planned behavior clearly marked as planned.
 
 ## Planning Rules
 
@@ -28,9 +27,9 @@ Read in this order:
 
 - The app target uses generated Info.plist values. Privacy strings may live in build settings until a real `Info.plist` is checked in.
 - The app target currently defaults Swift code to `MainActor` [a Swift rule that keeps code on the UI thread]. Move heavy audio and transcription work off the main thread on purpose.
-- Keep capture, mixing, transcription, persistence, and UI in separate modules once they exist. Do not let `ContentView` become the app’s control center.
+- Keep capture, mixing, transcription, persistence, and UI in separate modules once they exist. Do not let `ContentView` become the app's control center.
 - No database exists yet. If you add saved session data, document the schema [data shape], migration [how old saved data becomes new saved data], and rollback path in an `ExecPlan` first.
-- Planned capture work will rely on Apple frameworks with unusual rules. ScreenCaptureKit needs screen-recording permission, and microphone capture needs microphone permission.
+- Current capture work relies on Apple frameworks with unusual rules. ScreenCaptureKit needs screen-recording permission, and microphone capture needs microphone permission.
 
 ## Safe Reading Order For Product Work
 

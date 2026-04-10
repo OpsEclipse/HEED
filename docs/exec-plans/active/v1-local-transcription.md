@@ -2,7 +2,7 @@
 
 ## Goal
 
-Build Heed into a macOS 14+ app that records microphone audio and system audio after the user clicks `Record`, transcribes both sources locally with Whisper, shows a live brutalist transcript with clear `MIC` and `SYSTEM` labels, and saves the finished session as a structured JSON file when the user clicks `Stop`. The app must work offline after install and must not keep raw audio after the session ends.
+Build Heed into a macOS 14+ app that records microphone audio and system audio after the user clicks `Record`, transcribes both sources locally with Whisper, shows a live transcript-first shell with clear `MIC` and `SYSTEM` labels, and saves the finished session as a structured JSON file when the user clicks `Stop`. The app must work offline after install and must not keep raw audio after the session ends.
 
 ## Scope
 
@@ -87,16 +87,10 @@ Build Heed into a macOS 14+ app that records microphone audio and system audio a
 ### 5. Transcript Timeline And UI
 
 - Build one main transcript screen in the existing app window.
-- Use a brutalist UI:
-  - monospace transcript text
-  - high contrast
-  - square corners
-  - hard dividers
-  - no shadows or soft glass styling
+- Use a transcript-first UI with strong contrast and clear source labels.
 - Main visible controls:
-  - large `Record` / `Stop` button
-  - session timer
-  - recording status
+  - floating `Record` / `Stop` button
+  - session timer and status in a quiet utility rail
   - live transcript list
   - clear `MIC` and `SYSTEM` labels
   - per-segment timestamps
@@ -104,6 +98,7 @@ Build Heed into a macOS 14+ app that records microphone audio and system audio a
 - If both sources speak at the same time, keep both rows. Overlap is allowed.
 - Auto-scroll while the user is at the bottom. If the user scrolls away, stop forcing scroll until they return.
 - After stop, keep the same window and switch into a simple review state with export actions.
+- The current refreshed shell still exposes clipboard copy in the UI. File export code remains implemented in the controller, but the shell does not surface it right now.
 - While capture is active, keep the live session selected so the detail pane stays aligned with the recording in progress.
 
 ### 6. Persistence And Export
@@ -208,7 +203,8 @@ These names can shift slightly during implementation, but the ownership seams [t
 - 2026-04-08: Created the initial ExecPlan from the agreed product direction and implementation choices.
 - 2026-04-08: Lowered the app target to macOS `14.0`, added privacy strings, enabled export-safe sandbox access, and bundled a Whisper helper build step.
 - 2026-04-08: Implemented `RecordingController`, `PermissionsManager`, `MicCaptureManager`, `SystemAudioCaptureManager`, per-source chunking, `WhisperWorker`, `SessionStore`, `TranscriptTimelineStore`, and export helpers.
-- 2026-04-08: Replaced the placeholder UI with a brutalist sessions-plus-transcript workspace and added demo-mode hooks for UI testing.
+- 2026-04-08: Replaced the placeholder UI with a first working sessions-plus-transcript workspace and added demo-mode hooks for UI testing.
+- 2026-04-09: Refreshed that first shell into the current transcript-first layout with a collapsible sidebar, floating transport, and quiet utility rail.
 - 2026-04-08: Added unit coverage for timeline ordering, export formatting, and session recovery, plus UI coverage for launch and demo-mode recording.
 - 2026-04-08: Verified `xcodebuild -project heed.xcodeproj -scheme heed -destination 'platform=macOS' build`.
 - 2026-04-08: Verified `xcodebuild -project heed.xcodeproj -scheme heed -destination 'platform=macOS' test`.
@@ -259,6 +255,7 @@ These names can shift slightly during implementation, but the ownership seams [t
 ## Outcomes & Retrospective
 
 - The plan is implemented as a first working v1 path in the repo: permissions, capture, local Whisper transcription, live labeled transcript UI, autosave, relaunch recovery, and export all exist in code.
+- The shipped shell no longer matches the original brutalist draft. It now uses the later transcript-first refresh, while still preserving the same underlying capture and session behaviors.
 - The main compromise was packaging: the app bundles a helper executable and downloads the model during build instead of storing the model binary in git.
 - The latest startup hardening changes were re-verified with a clean build and the `heedTests` unit suite.
 - The main remaining gap is real-world validation, not missing product wiring. Device changes, long-run stability, and first-chunk latency still need more manual coverage on target hardware.
