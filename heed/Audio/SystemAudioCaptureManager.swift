@@ -1,4 +1,5 @@
 import AVFoundation
+import CoreGraphics
 import CoreMedia
 import Foundation
 import ScreenCaptureKit
@@ -16,12 +17,20 @@ final class SystemAudioCaptureManager: NSObject {
     private var stream: SCStream?
     private var converter: AVAudioConverter?
     private var onFrames: (@Sendable ([Float]) -> Void)?
+    private var onFailure: (@Sendable (String) -> Void)?
+    private var isStopping = false
 
-    func start(onFrames: @escaping @Sendable ([Float]) -> Void) async throws {
+    func start(
+        onFrames: @escaping @Sendable ([Float]) -> Void,
+        onFailure: @escaping @Sendable (String) -> Void
+    ) async throws {
         self.onFrames = onFrames
+        self.onFailure = onFailure
+        self.isStopping = false
 
         let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
-        guard let display = content.displays.first else {
+        let mainDisplayID = CGMainDisplayID()
+        guard let display = content.displays.first(where: { $0.displayID == mainDisplayID }) ?? content.displays.first else {
             throw NSError(domain: "Heed.SystemAudioCapture", code: 1, userInfo: [
                 NSLocalizedDescriptionKey: "No display is available for ScreenCaptureKit."
             ])
@@ -38,22 +47,25 @@ final class SystemAudioCaptureManager: NSObject {
         configuration.showsCursor = false
 
         let stream = SCStream(filter: filter, configuration: configuration, delegate: self)
-        try stream.addStreamOutput(self, type: .screen, sampleHandlerQueue: sampleHandlerQueue)
         try stream.addStreamOutput(self, type: .audio, sampleHandlerQueue: sampleHandlerQueue)
         try await stream.startCapture()
         self.stream = stream
     }
 
     func stop() async {
+        isStopping = true
         if let stream {
             try? await stream.stopCapture()
         }
         self.stream = nil
         self.converter = nil
+        self.onFailure = nil
+        self.onFrames = nil
     }
 
     private func handle(sampleBuffer: CMSampleBuffer) {
         guard let pcmBuffer = sampleBuffer.heedAudioBuffer() else {
+            NSLog("System audio capture dropped an unreadable audio buffer.")
             return
         }
 
@@ -61,9 +73,14 @@ final class SystemAudioCaptureManager: NSObject {
             converter = AVAudioConverter(from: pcmBuffer.format, to: targetFormat)
         }
 
-        let converted = convert(buffer: pcmBuffer) ?? pcmBuffer
+        guard let converted = convert(buffer: pcmBuffer) else {
+            NSLog("System audio capture dropped a buffer that could not be converted.")
+            return
+        }
+
         let frames = extractFrames(from: converted)
         guard !frames.isEmpty else {
+            NSLog("System audio capture dropped an empty converted buffer.")
             return
         }
 
@@ -124,6 +141,11 @@ extension SystemAudioCaptureManager: SCStreamOutput, SCStreamDelegate {
     }
 
     func stream(_ stream: SCStream, didStopWithError error: any Error) {
+        guard !isStopping else {
+            return
+        }
+
+        onFailure?("System audio capture stopped unexpectedly: \(error.localizedDescription)")
         NSLog("System audio capture stopped: %@", error.localizedDescription)
     }
 }

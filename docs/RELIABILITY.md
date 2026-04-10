@@ -31,7 +31,7 @@
 - Main failure modes:
   No app audio captured, stream interruption, route changes with AirPods, app-specific capture quirks.
 - Current confidence:
-  Medium. `SystemAudioCaptureManager` now keeps the `ScreenCaptureKit` stream close to its native audio format and converts inside the app, which is more stable than forcing `16 kHz` mono at stream setup time.
+  Medium. `SystemAudioCaptureManager` now keeps the `ScreenCaptureKit` stream close to its native audio format, converts inside the app, and lets the controller keep a mic-only session alive if system audio dies mid-recording.
 - Best next step:
   Treat interruptions and reconnect logic as first-class behavior, not polish.
 
@@ -40,9 +40,9 @@
 - Why it matters:
   Bad mixing can erase speech or create distortion.
 - Main failure modes:
-  Clipping, drift between sources, chunk seams cutting words, memory growth.
+  Clipping, drift between sources, silence detection splitting one thought too early, or memory growth during long speech.
 - Current confidence:
-  Medium. Per-source chunking exists with 5-second windows and 1-second overlap.
+  Medium. Per-source utterance chunking now waits for speech to end, keeps a short silence hold so brief pauses stay inside one utterance, and flushes any in-progress speech when recording stops.
 - Best next step:
   Add structured logs for chunk timing and validate long sessions for memory growth.
 
@@ -51,9 +51,9 @@
 - Why it matters:
   Slow or unstable inference kills the live experience.
 - Main failure modes:
-  First chunk delay, backlog growth, model missing, UI stalls.
+  First chunk delay, backlog growth, model missing, helper timeouts, UI stalls.
 - Current confidence:
-  Medium. The app uses background `WhisperWorker` actors and a bundled helper process.
+  Medium. The app uses background `WhisperWorker` actors and a bundled helper process. The helper `stderr` pipe is drained, response waits are bounded, and recording startup now has a watchdog [a timer that fails fast when no usable audio or text arrives] so the session clock does not run forever with a dead pipeline.
 - Best next step:
   Measure first-chunk latency on supported Apple Silicon hardware and consider prewarm if needed.
 
@@ -64,9 +64,20 @@
 - Main failure modes:
   Crash before save, partial writes, incompatible future format changes.
 - Current confidence:
-  Medium-high. `SessionStore` autosaves atomically on every new segment and recovers incomplete sessions on relaunch.
+  Medium-high. `SessionStore` autosaves atomically on every new segment, recovers incomplete sessions on relaunch, and now deletes empty failed sessions so retries do not leave junk behind.
 - Best next step:
   Autosave during recording and document migration [how old saved data becomes new saved data] before changing format.
+
+## Recording Control
+
+- Why it matters:
+  If stop or startup hangs, the whole app feels broken even when capture code is partly working.
+- Main failure modes:
+  Timer keeps running, `Record` never becomes clickable again, or the session gets stuck after one source dies.
+- Current confidence:
+  Medium. The controller now stops the timer as soon as stop begins, keeps recording if only one source fails, and cleans up interrupted state so the next recording attempt is not blocked.
+- Best next step:
+  Manually test device changes, denied permissions, and one-source-only startup on a clean machine.
 
 ## Export
 
@@ -81,7 +92,7 @@
 
 ## Current Trust Summary
 
-The repo is now trustworthy enough for a first end-to-end local path in development. The biggest remaining gap is not basic wiring. It is deeper real-world validation across permission resets, device changes, and live meeting apps.
+The repo is now trustworthy enough for a first end-to-end local path in development. The biggest remaining gap is not basic wiring. It is deeper real-world validation across permission resets, device changes, and live meeting apps, especially around degraded single-source recording after one capture path fails.
 
 ## Practices That Would Improve Trust
 

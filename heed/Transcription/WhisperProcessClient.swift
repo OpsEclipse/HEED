@@ -6,6 +6,7 @@ enum WhisperProcessError: LocalizedError {
     case launchFailed(String)
     case requestEncodeFailed
     case responseMissing
+    case responseTimedOut
     case responseDecodeFailed
     case workerError(String)
 
@@ -21,6 +22,8 @@ enum WhisperProcessError: LocalizedError {
             return "Whisper request encoding failed."
         case .responseMissing:
             return "Whisper helper closed before sending a response."
+        case .responseTimedOut:
+            return "Whisper helper took too long to respond."
         case .responseDecodeFailed:
             return "Whisper helper returned unreadable output."
         case .workerError(let message):
@@ -55,7 +58,10 @@ actor WhisperProcessClient {
     private var process: Process?
     private var inputHandle: FileHandle?
     private var outputHandle: FileHandle?
+    private var errorHandle: FileHandle?
     private var outputBuffer = Data()
+    private var errorBuffer = Data()
+    private let responsePollInterval = Duration.milliseconds(25)
 
     init(helperURL: URL, modelURL: URL) {
         self.helperURL = helperURL
@@ -95,9 +101,25 @@ actor WhisperProcessClient {
         self.process = process
         self.inputHandle = stdinPipe.fileHandleForWriting
         self.outputHandle = stdoutPipe.fileHandleForReading
+        self.outputHandle?.readabilityHandler = { [weak self] handle in
+            let data = handle.availableData
+            Task {
+                await self?.consumeStandardOutput(data)
+            }
+        }
+        self.errorHandle = stderrPipe.fileHandleForReading
+        self.errorHandle?.readabilityHandler = { [weak self] handle in
+            let data = handle.availableData
+            Task {
+                await self?.consumeStandardError(data)
+            }
+        }
     }
 
-    func transcribe(frames: [Float]) async throws -> [Response.Segment] {
+    func transcribe(
+        frames: [Float],
+        responseTimeout: Duration = .seconds(20)
+    ) async throws -> [Response.Segment] {
         try start()
 
         let tempURL = FileManager.default.temporaryDirectory
@@ -116,12 +138,16 @@ actor WhisperProcessClient {
             throw WhisperProcessError.requestEncodeFailed
         }
 
+        errorBuffer = Data()
         let line = payload + Data([0x0A])
         try inputHandle?.write(contentsOf: line)
 
-        let responseLine = try readLine()
+        let responseLine = try await readLine(timeout: responseTimeout)
         guard let responseData = responseLine.data(using: .utf8),
               let response = try? decoder.decode(Response.self, from: responseData) else {
+            if let helperError = capturedStandardError() {
+                throw WhisperProcessError.workerError(helperError)
+            }
             throw WhisperProcessError.responseDecodeFailed
         }
 
@@ -133,13 +159,18 @@ actor WhisperProcessClient {
     }
 
     func stop() {
+        outputHandle?.readabilityHandler = nil
+        errorHandle?.readabilityHandler = nil
         inputHandle?.closeFile()
         outputHandle?.closeFile()
+        errorHandle?.closeFile()
         process?.terminate()
         process = nil
         inputHandle = nil
         outputHandle = nil
+        errorHandle = nil
         outputBuffer = Data()
+        errorBuffer = Data()
     }
 
     private func writePCM16(_ frames: [Float], to url: URL) throws {
@@ -151,10 +182,13 @@ actor WhisperProcessClient {
         try data.write(to: url, options: .atomic)
     }
 
-    private func readLine() throws -> String {
-        guard let outputHandle else {
+    private func readLine(timeout: Duration) async throws -> String {
+        guard outputHandle != nil else {
             throw WhisperProcessError.responseMissing
         }
+
+        let clock = ContinuousClock()
+        let deadline = clock.now + timeout
 
         while true {
             if let newlineIndex = outputBuffer.firstIndex(of: 0x0A) {
@@ -163,11 +197,47 @@ actor WhisperProcessClient {
                 return String(decoding: lineData, as: UTF8.self)
             }
 
-            guard let chunk = try outputHandle.read(upToCount: 4_096), !chunk.isEmpty else {
+            if let process, !process.isRunning {
+                if let helperError = capturedStandardError() {
+                    throw WhisperProcessError.workerError(helperError)
+                }
                 throw WhisperProcessError.responseMissing
             }
 
-            outputBuffer.append(chunk)
+            if clock.now >= deadline {
+                throw WhisperProcessError.responseTimedOut
+            }
+
+            try await Task.sleep(for: responsePollInterval)
         }
+    }
+
+    private func consumeStandardOutput(_ data: Data) {
+        guard !data.isEmpty else {
+            outputHandle?.readabilityHandler = nil
+            return
+        }
+
+        outputBuffer.append(data)
+    }
+
+    private func consumeStandardError(_ data: Data) {
+        guard !data.isEmpty else {
+            errorHandle?.readabilityHandler = nil
+            return
+        }
+
+        errorBuffer.append(data)
+    }
+
+    private func capturedStandardError() -> String? {
+        let message = String(decoding: errorBuffer, as: UTF8.self)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !message.isEmpty else {
+            return nil
+        }
+
+        return message
     }
 }

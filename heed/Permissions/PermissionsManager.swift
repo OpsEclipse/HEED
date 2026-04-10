@@ -24,22 +24,24 @@ struct PermissionSnapshot: Equatable, Sendable {
         }
 
         if microphone == .denied && screenCapture == .denied {
-            return "Turn on microphone and screen capture in System Settings, then reopen Heed."
+            return "Turn on microphone and screen capture in System Settings, then press Refresh Permissions or reopen Heed."
         }
 
         if microphone == .denied {
-            return "Turn on microphone access in System Settings, then reopen Heed."
+            return "Turn on microphone access in System Settings, then press Refresh Permissions or reopen Heed."
         }
 
         if screenCapture == .denied {
-            return "Turn on screen recording in System Settings, then reopen Heed."
+            return "Turn on screen recording in System Settings, then press Refresh Permissions or reopen Heed."
         }
 
         return "Heed asks for access only when you press Record."
     }
 }
 
-struct PermissionsManager {
+final class PermissionsManager {
+    private var hasRequestedScreenCapture = false
+
     func refresh() -> PermissionSnapshot {
         PermissionSnapshot(
             microphone: microphoneState(),
@@ -58,6 +60,7 @@ struct PermissionsManager {
         }
 
         if current.screenCapture != .granted {
+            hasRequestedScreenCapture = true
             _ = CGRequestScreenCaptureAccess()
         }
 
@@ -78,7 +81,11 @@ struct PermissionsManager {
     }
 
     private func screenCaptureState() -> PermissionState {
-        CGPreflightScreenCaptureAccess() ? .granted : .denied
+        if CGPreflightScreenCaptureAccess() {
+            return .granted
+        }
+
+        return hasRequestedScreenCapture ? .denied : .unknown
     }
 
     private func requestMicrophoneAccess() async -> Bool {

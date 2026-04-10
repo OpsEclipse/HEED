@@ -16,7 +16,7 @@
 - Risk:
   Screen-capture permission can grant access broader than users expect.
 - Current posture:
-  `ScreenCaptureKit` capture is implemented, and the app explains the need for screen and system-audio capture before recording.
+  `ScreenCaptureKit` capture is implemented. The app now keeps the first-run state neutral until the user clicks `Record`, then shows blocked guidance if screen recording stays unavailable.
 - Guardrail:
   Explain clearly why the app needs this permission and never imply it captures less than it really does.
 
@@ -55,16 +55,17 @@ Real security-relevant facts from the project today:
 - Hardened Runtime is enabled.
 - Generated Info.plist is enabled.
 - Privacy usage strings for microphone, screen capture, and system audio are present in build settings.
+- The checked-in entitlements file enables App Sandbox and microphone input. Screen recording uses the macOS privacy prompt flow here, not a separate checked-in entitlement.
 - No network client is present in app code today.
 - Transcript storage lives under Application Support.
 - The Whisper model download URL is `https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin`.
-- The current downloaded model checksum is `a03779c86df3323075f5e796cb2ce5029f00ec8869eee3fdfb897afe36c6d002`.
+- The current docs record the downloaded model checksum as `a03779c86df3323075f5e796cb2ce5029f00ec8869eee3fdfb897afe36c6d002`, but the build step does not enforce that checksum yet.
 
 ## Main Risks Right Now
 
 - Screen recording is still a broad permission and needs careful user explanation.
 - Export can move sensitive text outside the app sandbox.
-- The build-time model download should eventually add explicit checksum verification in code, not docs alone.
+- The build-time model download should still add explicit checksum verification in code, not docs alone.
 
 ## Security Posture Summary
 

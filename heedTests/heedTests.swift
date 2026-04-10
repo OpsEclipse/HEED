@@ -74,4 +74,119 @@ struct heedTests {
 
         try? FileManager.default.removeItem(at: rootURL)
     }
+
+    @Test func sessionStoreDeleteRemovesSavedSession() async throws {
+        let rootURL = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString, directoryHint: .isDirectory)
+        let store = SessionStore(baseDirectoryURL: rootURL)
+        let session = TranscriptSession(
+            startedAt: Date(timeIntervalSince1970: 0),
+            duration: 1,
+            status: .recording,
+            modelName: "ggml-base.en",
+            appVersion: "1.0"
+        )
+
+        try await store.save(session: session)
+        try await store.deleteSession(id: session.id)
+        let loaded = try await store.loadSessions()
+
+        #expect(loaded.isEmpty)
+
+        try? FileManager.default.removeItem(at: rootURL)
+    }
+
+    @Test func audioChunkerWaitsForSilenceBeforeEmitting() {
+        var chunker = AudioChunker(source: .mic)
+        let speechFrames = Array(repeating: Float(0.08), count: AudioChunker.analysisWindowFrames * 8)
+
+        let chunks = chunker.append(speechFrames)
+
+        #expect(chunks.isEmpty)
+    }
+
+    @Test func audioChunkerEmitsAfterSpeechThenSilence() {
+        var chunker = AudioChunker(source: .mic)
+        let settings = AudioEnergyGate.settings(for: .mic)
+        let speechFrames = Array(repeating: Float(0.08), count: settings.analysisWindowFrames * 8)
+        let silenceFrames = Array(
+            repeating: Float(0),
+            count: settings.analysisWindowFrames * (settings.holdWindowCount + 1)
+        )
+
+        _ = chunker.append(speechFrames)
+        let chunks = chunker.append(silenceFrames)
+
+        #expect(chunks.count == 1)
+        #expect(chunks[0].startedAt == 0)
+        #expect(chunks[0].frames.count > speechFrames.count)
+    }
+
+    @Test func audioEnergyGateSkipsSilentFramesForStartupCheck() {
+        let silentFrames = Array(repeating: Float(0), count: AudioChunker.analysisWindowFrames * 12)
+
+        #expect(AudioEnergyGate.containsSpeechLikeEnergy(silentFrames, source: .mic) == false)
+    }
+
+    @Test func audioEnergyGateAcceptsQuietMicSpeechForStartupCheck() {
+        let quietSpeechFrames = Array(repeating: Float(0.022), count: AudioChunker.analysisWindowFrames * 12)
+
+        #expect(AudioEnergyGate.containsSpeechLikeEnergy(quietSpeechFrames, source: .mic) == true)
+    }
+
+    @Test func audioChunkerEmitsQuietMicSpeechAfterSilence() {
+        var chunker = AudioChunker(source: .mic)
+        let settings = AudioEnergyGate.settings(for: .mic)
+        let quietSpeechFrames = Array(repeating: Float(0.03), count: settings.analysisWindowFrames * 8)
+        let silenceFrames = Array(
+            repeating: Float(0),
+            count: settings.analysisWindowFrames * (settings.holdWindowCount + 1)
+        )
+
+        _ = chunker.append(quietSpeechFrames)
+        let chunks = chunker.append(silenceFrames)
+
+        #expect(chunks.count == 1)
+        #expect(chunks[0].frames.count > quietSpeechFrames.count)
+    }
+
+    @Test func audioChunkerFlushesOngoingUtteranceOnStop() {
+        var chunker = AudioChunker(source: .mic)
+        let speechFrames = Array(repeating: Float(0.08), count: AudioChunker.analysisWindowFrames * 10)
+
+        _ = chunker.append(speechFrames)
+        let chunks = chunker.flush()
+
+        #expect(chunks.count == 1)
+        #expect(chunks[0].frames.count >= speechFrames.count)
+    }
+
+    @Test func demoModeRecordingImmediatelyEntersRecordingState() async throws {
+        let rootURL = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString, directoryHint: .isDirectory)
+        let store = SessionStore(baseDirectoryURL: rootURL)
+        let controller = await MainActor.run {
+            RecordingController(demoMode: true, sessionStore: store)
+        }
+
+        await MainActor.run {
+            controller.handlePrimaryAction()
+        }
+
+        var recordedState: RecordingState?
+        for _ in 0..<20 {
+            recordedState = await MainActor.run { controller.state }
+            if recordedState == .recording {
+                break
+            }
+            try await Task.sleep(for: .milliseconds(25))
+        }
+
+        #expect(recordedState == .recording)
+
+        await MainActor.run {
+            controller.handlePrimaryAction()
+        }
+
+        try? await Task.sleep(for: .milliseconds(50))
+        try? FileManager.default.removeItem(at: rootURL)
+    }
 }

@@ -1,19 +1,16 @@
 # Tech Debt Tracker
 
-- `Platform target`
-  The project deploys to macOS `26.2`, but the product phases mention broader support. Decide the real floor and align the Xcode target.
+- `Model download hardening`
+  The build step downloads `ggml-base.en.bin`, but it still does not verify the checksum in code before bundling it.
 
-- `Privacy setup`
-  The repo uses generated Info.plist values, but the required microphone and screen-capture strings are not in place yet.
+- `Real-world capture validation`
+  The v1 path is wired, but device changes, interruption handling, and long meetings still need deeper manual validation on real hardware.
 
-- `Entitlements`
-  The planned capture product needs explicit permission-related setup, but no checked-in entitlements file exists yet.
+- `Permission recovery UX`
+  The app now keeps first-run screen-capture guidance honest, but the recovery flow still relies on plain inline text instead of a richer guided walkthrough.
 
-- `Module boundaries`
-  The app still has one placeholder view. Create clear ownership seams before real feature code piles into `ContentView`.
+- `Export feedback`
+  Export works, but the UI still does not show a clear success state after copy or file export.
 
-- `Session format`
-  The repo has no decision yet on SwiftData vs JSON for saved transcripts.
-
-- `Tests`
-  Unit and UI test targets are still template stubs. Add one meaningful path as soon as recording exists.
+- `Long-run observability`
+  The app has very light logging today. Capture, chunking, and autosave would be easier to trust with structured logs [consistent machine-readable logs].

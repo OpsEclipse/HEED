@@ -15,8 +15,14 @@ actor WhisperWorker {
         try await client.start()
     }
 
-    func transcribe(chunk: AudioChunk) async throws -> [TranscriptSegment] {
-        let rawSegments = try await client.transcribe(frames: chunk.frames)
+    func transcribe(
+        chunk: AudioChunk,
+        responseTimeout: Duration = .seconds(20)
+    ) async throws -> [TranscriptSegment] {
+        let rawSegments = try await client.transcribe(
+            frames: chunk.frames,
+            responseTimeout: responseTimeout
+        )
         var output: [TranscriptSegment] = []
 
         for (index, rawSegment) in rawSegments.enumerated() {

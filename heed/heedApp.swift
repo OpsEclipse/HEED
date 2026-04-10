@@ -17,5 +17,7 @@ struct heedApp: App {
         WindowGroup {
             ContentView(controller: controller)
         }
+        .defaultSize(width: 1280, height: 840)
+        .windowStyle(.hiddenTitleBar)
     }
 }

@@ -69,6 +69,15 @@ actor SessionStore {
         try data.write(to: sessionURL, options: .atomic)
     }
 
+    func deleteSession(id: UUID) throws {
+        let sessionDirectory = baseDirectoryURL.appending(path: id.uuidString, directoryHint: .isDirectory)
+        guard FileManager.default.fileExists(atPath: sessionDirectory.path()) else {
+            return
+        }
+
+        try FileManager.default.removeItem(at: sessionDirectory)
+    }
+
     func sessionDirectoryURL(for sessionID: UUID) -> URL {
         baseDirectoryURL.appending(path: sessionID.uuidString, directoryHint: .isDirectory)
     }

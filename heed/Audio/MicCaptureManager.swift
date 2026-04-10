@@ -14,11 +14,17 @@ final class MicCaptureManager {
 
     func start(onFrames: @escaping @Sendable ([Float]) -> Void) throws {
         let inputNode = engine.inputNode
-        let inputFormat = inputNode.inputFormat(forBus: 0)
-        converter = AVAudioConverter(from: inputFormat, to: targetFormat)
+        let tapFormat = inputNode.outputFormat(forBus: 0)
+        guard tapFormat.channelCount > 0 else {
+            throw NSError(domain: "Heed.MicCapture", code: 1, userInfo: [
+                NSLocalizedDescriptionKey: "The selected microphone is not providing a usable audio format."
+            ])
+        }
+
+        converter = AVAudioConverter(from: tapFormat, to: targetFormat)
 
         inputNode.removeTap(onBus: 0)
-        inputNode.installTap(onBus: 0, bufferSize: 2_048, format: inputFormat) { [weak self] buffer, _ in
+        inputNode.installTap(onBus: 0, bufferSize: 2_048, format: tapFormat) { [weak self] buffer, _ in
             guard let self, let converted = self.convert(buffer) else {
                 return
             }

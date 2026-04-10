@@ -41,6 +41,7 @@ These are real project settings today.
 - Generated Info.plist: enabled
 - Default Swift actor isolation [the thread-safety rule Swift uses for code access]: `MainActor`
 - Privacy usage strings for microphone, screen capture, and system audio: present
+- Checked-in entitlements: App Sandbox and microphone input; screen recording still relies on the macOS permission flow instead of a separate entitlement
 - User-selected file write access for exports: enabled
 
 Those settings live in [`../heed.xcodeproj/project.pbxproj`](../heed.xcodeproj/project.pbxproj).
@@ -54,9 +55,9 @@ The current local meeting-transcript pipeline is:
 2. `MicCaptureManager`
    Pulls microphone audio from `AVAudioEngine`.
 3. `SystemAudioCaptureManager`
-   Pulls system audio from `ScreenCaptureKit` and converts the stream’s native audio format into the app’s `16 kHz` mono pipeline.
-4. Per-source chunk buffer
-   Holds short rolling audio chunks for transcription.
+   Pulls system audio from `ScreenCaptureKit`, converts the stream’s native audio format into the app’s `16 kHz` mono pipeline, and reports unexpected stream failures back to the controller.
+4. Per-source utterance chunker
+   Buffers audio until speech ends, then emits one speech-bounded chunk for transcription with a short silence hold so brief pauses do not split one thought in half.
 5. `WhisperWorker`
    Sends one source at a time into the bundled Whisper helper on a background actor [a Swift unit that protects data from race conditions].
 6. Session store
