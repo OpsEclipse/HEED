@@ -265,6 +265,30 @@ struct heedTests {
         let actionTitle = await MainActor.run { controller.compileActionTitle }
         #expect(actionTitle == "Try again")
     }
+
+    @Test func taskAnalysisControllerRecordsSpawnAgentRequests() async {
+        let controller = await MainActor.run {
+            TaskAnalysisController()
+        }
+
+        await MainActor.run {
+            controller.requestSpawnAgent(for: "verify-audio-paths")
+        }
+
+        let firstSpawnedTaskID = await MainActor.run {
+            controller.lastSpawnedTaskID
+        }
+        #expect(firstSpawnedTaskID == "verify-audio-paths")
+
+        await MainActor.run {
+            controller.requestSpawnAgent(for: "review-source-labels")
+        }
+
+        let secondSpawnedTaskID = await MainActor.run {
+            controller.lastSpawnedTaskID
+        }
+        #expect(secondSpawnedTaskID == "review-source-labels")
+    }
 }
 
 private struct StubTaskAnalysisCompiler: TaskAnalysisCompiling {

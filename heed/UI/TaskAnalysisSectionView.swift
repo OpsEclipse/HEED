@@ -152,8 +152,12 @@ struct TaskAnalysisSectionView: View {
                         TaskRowView(
                             task: task,
                             isSelected: selectedTaskIDs.contains(task.id),
+                            spawnedTaskID: controller.lastSpawnedTaskID,
                             onToggleSelection: {
                                 controller.toggleTaskSelection(task.id)
+                            },
+                            onSpawnAgent: {
+                                controller.requestSpawnAgent(for: task.id)
                             },
                             onShowSource: {
                                 controller.showSource(for: task.evidenceSegmentIDs)
@@ -259,59 +263,88 @@ struct TaskAnalysisSectionView: View {
 private struct TaskRowView: View {
     let task: CompiledTask
     let isSelected: Bool
+    let spawnedTaskID: String?
     let onToggleSelection: () -> Void
+    let onSpawnAgent: () -> Void
     let onShowSource: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .top, spacing: 12) {
-                Button(action: onToggleSelection) {
-                    Image(systemName: isSelected ? "checkmark.square.fill" : "square")
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(isSelected ? HeedTheme.ColorToken.actionYellow : HeedTheme.ColorToken.textSecondary)
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("task-row-toggle-\(task.id)")
+        HStack(alignment: .top, spacing: 12) {
+            Button(action: onToggleSelection) {
+                Image(systemName: isSelected ? "checkmark.square.fill" : "square")
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(isSelected ? HeedTheme.ColorToken.actionYellow : HeedTheme.ColorToken.textSecondary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("task-row-toggle-\(task.id)")
 
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(alignment: .top, spacing: 10) {
-                        Text(task.title)
-                            .font(.system(size: 15, weight: .semibold, design: .default))
-                            .foregroundStyle(HeedTheme.ColorToken.textPrimary)
-                            .fixedSize(horizontal: false, vertical: true)
-
-                        Text(task.type.rawValue)
-                            .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                            .foregroundStyle(HeedTheme.ColorToken.textSecondary)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(HeedTheme.ColorToken.panelRaised.opacity(0.75))
-                    }
-
-                    Text(task.details)
-                        .font(.system(size: 14, weight: .regular, design: .default))
-                        .foregroundStyle(HeedTheme.ColorToken.textPrimary.opacity(0.86))
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .top, spacing: 10) {
+                    Text(task.title)
+                        .font(.system(size: 15, weight: .semibold, design: .default))
+                        .foregroundStyle(HeedTheme.ColorToken.textPrimary)
                         .fixedSize(horizontal: false, vertical: true)
 
-                    if let assigneeHint = task.assigneeHint {
-                        Text("Assignee hint: \(assigneeHint)")
-                            .font(.system(size: 11, weight: .medium, design: .monospaced))
-                            .foregroundStyle(HeedTheme.ColorToken.textSecondary)
-                    }
+                    Text(task.type.rawValue)
+                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(HeedTheme.ColorToken.textSecondary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(HeedTheme.ColorToken.panelRaised.opacity(0.75))
 
-                    evidenceLine(text: task.evidenceExcerpt)
+                    Spacer(minLength: 12)
 
-                    Button(action: onShowSource) {
-                        Text("Show source")
-                            .font(.system(size: 11, weight: .medium, design: .monospaced))
-                            .foregroundStyle(HeedTheme.ColorToken.textPrimary.opacity(0.82))
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("task-row-source-\(task.id)")
+                    spawnAgentButton
                 }
+
+                Text(task.details)
+                    .font(.system(size: 14, weight: .regular, design: .default))
+                    .foregroundStyle(HeedTheme.ColorToken.textPrimary.opacity(0.86))
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if let assigneeHint = task.assigneeHint {
+                    Text("Assignee hint: \(assigneeHint)")
+                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .foregroundStyle(HeedTheme.ColorToken.textSecondary)
+                }
+
+                evidenceLine(text: task.evidenceExcerpt)
+
+                Button(action: onShowSource) {
+                    Text("Show source")
+                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .foregroundStyle(HeedTheme.ColorToken.textPrimary.opacity(0.82))
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("task-row-source-\(task.id)")
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(.vertical, 14)
+    }
+
+    private var spawnAgentButton: some View {
+        Button(action: onSpawnAgent) {
+            HStack(spacing: 6) {
+                Text(spawnButtonTitle)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 9, weight: .semibold))
+            }
+            .font(.system(size: 11, weight: .semibold, design: .default))
+        }
+        .buttonStyle(
+            HeedTransportButtonStyle(
+                fillColor: HeedTheme.ColorToken.actionYellow,
+                textColor: Color.black.opacity(0.8),
+                size: .compact
+            )
+        )
+        .accessibilityLabel(spawnButtonTitle)
+        .accessibilityIdentifier("task-row-spawn-agent-\(task.id)")
+    }
+
+    private var spawnButtonTitle: String {
+        spawnedTaskID == task.id ? "Spawning..." : "Spawn agent"
     }
 
     private func evidenceLine(text: String) -> some View {

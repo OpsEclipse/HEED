@@ -60,6 +60,7 @@ final class TaskAnalysisController: ObservableObject {
     @Published private(set) var sourceJumpRequest: SourceJumpRequest?
     @Published private(set) var highlightedSegmentID: UUID?
     @Published private(set) var sectionFocusNonce = 0
+    @Published private(set) var lastSpawnedTaskID: String?
 
     private let compiler: any TaskAnalysisCompiling
     private var selectedSessionID: UUID?
@@ -321,6 +322,10 @@ final class TaskAnalysisController: ObservableObject {
         }
 
         showSource(for: segmentID)
+    }
+
+    func requestSpawnAgent(for taskID: String) {
+        lastSpawnedTaskID = taskID
     }
 
     private func canCompile(_ session: TranscriptSession) -> Bool {

@@ -24,7 +24,8 @@ struct FloatingTransportView: View {
             .buttonStyle(
                 HeedTransportButtonStyle(
                     fillColor: buttonFill,
-                    textColor: buttonTextColor
+                    textColor: buttonTextColor,
+                    size: .primary
                 )
             )
             .disabled(!isEnabled || recordingState == .stopping || recordingState == .requestingPermissions)
@@ -44,26 +45,89 @@ struct FloatingTransportView: View {
     }
 }
 
-private struct HeedTransportButtonStyle: ButtonStyle {
+enum HeedTransportButtonSize {
+    case primary
+    case compact
+}
+
+struct HeedTransportButtonStyle: ButtonStyle {
     let fillColor: Color
     let textColor: Color
+    let size: HeedTransportButtonSize
+
+    init(fillColor: Color, textColor: Color, size: HeedTransportButtonSize = .primary) {
+        self.fillColor = fillColor
+        self.textColor = textColor
+        self.size = size
+    }
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.system(size: 15, weight: .semibold, design: .default))
+            .font(.system(size: fontSize, weight: .semibold, design: .default))
             .foregroundStyle(textColor.opacity(configuration.isPressed ? 0.82 : 1))
-            .frame(
-                minWidth: 132,
-                minHeight: 44
-            )
-            .padding(.horizontal, 18)
-            .background(buttonShape.fill(fillColor.opacity(configuration.isPressed ? 0.86 : 1)))
+            .frame(minWidth: minWidth, minHeight: minHeight)
+            .padding(.horizontal, horizontalPadding)
+            .background(buttonShape.fill(fillColor.opacity(configuration.isPressed ? pressedOpacity : normalOpacity)))
             .scaleEffect(configuration.isPressed ? 0.985 : 1)
             .animation(HeedTheme.Motion.quick, value: configuration.isPressed)
     }
 
+    private var fontSize: CGFloat {
+        switch size {
+        case .primary:
+            return 15
+        case .compact:
+            return 12
+        }
+    }
+
+    private var minWidth: CGFloat {
+        switch size {
+        case .primary:
+            return 132
+        case .compact:
+            return 0
+        }
+    }
+
+    private var minHeight: CGFloat {
+        switch size {
+        case .primary:
+            return 44
+        case .compact:
+            return 34
+        }
+    }
+
+    private var horizontalPadding: CGFloat {
+        switch size {
+        case .primary:
+            return 18
+        case .compact:
+            return 12
+        }
+    }
+
+    private var normalOpacity: Double {
+        switch size {
+        case .primary:
+            return 1
+        case .compact:
+            return 0.92
+        }
+    }
+
+    private var pressedOpacity: Double {
+        switch size {
+        case .primary:
+            return 0.86
+        case .compact:
+            return 0.82
+        }
+    }
+
     private var buttonShape: RoundedRectangle {
-        RoundedRectangle(cornerRadius: 8, style: .continuous)
+        RoundedRectangle(cornerRadius: size == .primary ? 8 : 7, style: .continuous)
     }
 }
 
