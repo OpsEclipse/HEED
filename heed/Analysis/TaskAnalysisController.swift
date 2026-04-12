@@ -134,6 +134,9 @@ final class TaskAnalysisController: ObservableObject {
     func setSelectedSession(_ session: TranscriptSession?) {
         let previousSessionID = selectedSessionID
         selectedSessionID = session?.id
+        if previousSessionID != selectedSessionID {
+            lastSpawnedTaskID = nil
+        }
 
         guard previousSessionID != selectedSessionID else {
             return
@@ -341,6 +344,7 @@ final class TaskAnalysisController: ObservableObject {
         currentState.isVisible = true
         currentState.isExpanded = true
         sessionStates[session.id] = currentState
+        lastSpawnedTaskID = nil
 
         let compiler = compiler
         currentState.compileTask = Task { [weak self] in

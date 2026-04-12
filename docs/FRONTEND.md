@@ -10,7 +10,7 @@ The app still has one main macOS window today.
 - The sessions list is in a hidden-by-default left sidebar column with a compact tree-style treatment.
 - The main record or stop action lives in one floating yellow button.
 - The window opens at a fixed default size and hides the normal macOS title bar controls.
-- The bottom utility rail shows quiet status text plus `Compile tasks`, `Copy as text`, and `Full screen` actions when the selected session is eligible for task review.
+- The bottom utility rail shows quiet status text plus `Compile tasks`, `Set API key`, `Copy as text`, and `Full screen` actions when the selected session is eligible for task review.
 - The controller still has `.txt` and `.md` file export code, but those file export actions are not surfaced in the current shell.
 
 ## Current Implemented States
@@ -26,7 +26,7 @@ The app still has one main macOS window today.
 - `error`
   The shell shows a blocked status. Detailed recovery text is tracked in the controller, but the refreshed shell does not render that full message yet. Partial transcripts still stay visible when they exist.
 - `post-transcript task review`
-  A completed transcript with real text can show an inline `Suggested tasks` appendix after the user clicks `Compile tasks`.
+  A completed transcript with real text can show an inline `Suggested tasks` appendix after the user clicks `Compile tasks`. One task can then open a separate right-side context panel.
 
 ## Refresh Status
 
@@ -52,6 +52,7 @@ This is the default visual focus.
 - When there is no transcript yet, the canvas shows only `Press record to begin the full transcript`.
 - When task review is present, it renders as one inline appendix below the transcript instead of replacing the screen.
 - Source jumps from the appendix scroll back to the matching transcript segment and briefly highlight it.
+- When task context is present, it renders in a right-side panel while the transcript stays visible.
 
 ### Sidebar
 
@@ -81,6 +82,7 @@ The bottom rail stays visually quiet.
 - It shows compact status text like recording state and elapsed time.
 - It keeps text-only actions on the right side.
 - It exposes `Compile tasks` only for completed sessions with transcript text.
+- It exposes `Set API key` as a plain-text action.
 - It keeps `Copy as text` and a fullscreen toggle visible beside that action.
 
 ### Inline Task Review
@@ -88,11 +90,20 @@ The bottom rail stays visually quiet.
 The transcript review flow stays in the same reading surface.
 
 - `Compile tasks` expands a collapsible `Suggested tasks` section below the transcript.
-- The section shows quiet status text while the local preview compiler is running.
+- The section shows quiet status text while OpenAI pass 1 is running.
 - `Tasks` appear first and support checkbox selection.
 - `Decisions` and `Follow-ups` stay collapsed by default and remain read-only.
 - Each row can use `Show source` to jump back to evidence in the transcript.
-- The current shipped build uses local fixture data for this UI path, so remote compilation and saved AI output are still planned.
+- Each task row now uses `Prepare context` instead of the old placeholder `Spawn agent` action.
+- The current shipped build uses real OpenAI calls in the normal app and fixture data only for UI-test mode.
+
+### Task Context Panel
+
+- `Prepare context` runs a second OpenAI pass for one task.
+- The panel opens on the right side of the shell.
+- The panel shows loading, retry, and loaded states.
+- The real `Spawn agent` button now lives inside that panel.
+- The current `Spawn agent` action is still only a placeholder state change. Final handoff wiring is still pending.
 
 ## Current Interaction Pattern
 
@@ -108,6 +119,9 @@ The transcript review flow stays in the same reading surface.
 10. The finished transcript stays in place for review instead of switching to a different screen.
 11. If the finished transcript has usable text, the user can click `Compile tasks`.
 12. The review result opens inline below the transcript and keeps the transcript visible during loading, retry, and recompile states.
+13. The user can click `Prepare context` on one task.
+14. The app opens a right-side task-context panel and keeps the transcript visible.
+15. The final `Spawn agent` action is available only inside that panel.
 
 ## Current UI Behavior
 
@@ -142,6 +156,7 @@ The transcript review flow stays in the same reading surface.
 - Let the sidebar support browsing without becoming the main focus.
 - Show `Compile tasks` only when the saved session is completed and has non-empty transcript text.
 - Keep the `Suggested tasks` appendix tied to the selected session instead of making it a global panel.
+- Reset temporary task context when the user switches sessions or recompiles tasks.
 
 ## Current Modules
 
@@ -153,6 +168,8 @@ These modules are now in code.
   Owns the main black canvas and centered reading column.
 - `TaskAnalysisSectionView`
   Renders the inline `Suggested tasks` appendix inside the transcript column.
+- `TaskContextPanelView`
+  Renders the temporary right-side task context panel.
 - `SessionSidebarView`
   Shows session titles and selection state.
 - `UtilityRailView`
@@ -169,12 +186,14 @@ These modules are now in code.
 - Extreme minimalism can remove useful feedback if status text becomes too faint.
 - Long transcripts can still feel heavy if the centered column is too wide or too cramped.
 - The inline task appendix can get dense if long evidence text or many items stack below the transcript.
+- The right-side task panel can squeeze the transcript on smaller window widths.
 - Permission and error states still need to feel first-class, even inside a very quiet layout.
 - The controller stores richer error text than the current shell renders, so blocked recovery still feels under-explained on screen.
 - The current macOS UI automation around the transport state transition is still somewhat flaky.
 - Local macOS accessibility authorization can block UI automation before the new inline review path finishes running.
 - Session titles are derived from transcript text instead of stored session metadata, so the label rule should stay consistent until a real title field exists.
 - File export still exists below the UI, so the team should decide whether to surface it again or keep the shell intentionally copy-first.
+- The final `Spawn agent` destination is still undefined, so the current panel stops at review plus placeholder spawn state.
 
 ## Where To Look
 

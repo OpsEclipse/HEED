@@ -79,6 +79,17 @@
 - Best next step:
   Manually test device changes, denied permissions, and one-source-only startup on a clean machine, then surface richer blocked or recovery text in the shell.
 
+## OpenAI Task Compilation
+
+- Why it matters:
+  This is the new post-meeting action path, so failures here directly shape whether users trust the app’s AI layer.
+- Main failure modes:
+  Missing API key, network failure, malformed structured output, stale pass 1 results landing on the wrong session, or stale pass 2 results landing on the wrong task.
+- Current confidence:
+  Medium. The app now uses an explicit two-pass OpenAI flow, keeps pass 2 temporary in memory, resets task context on session changes and recompiles, and has tests for structured decoding plus stale task-context requests.
+- Best next step:
+  Add request logging with request IDs, manual network-off checks, and one test double for malformed OpenAI output at the shell level.
+
 ## Export
 
 - Why it matters:
@@ -92,7 +103,7 @@
 
 ## Current Trust Summary
 
-The repo is now trustworthy enough for a first end-to-end local path in development. The biggest remaining gap is not basic wiring. It is deeper real-world validation across permission resets, device changes, and live meeting apps, especially around degraded single-source recording after one capture path fails.
+The repo is now trustworthy enough for a first end-to-end local path in development plus an explicit post-meeting AI path. The biggest remaining gaps are deeper real-world validation across permission resets, device changes, live meeting apps, and failure handling around the new network task pipeline.
 
 ## Practices That Would Improve Trust
 
