@@ -97,26 +97,6 @@ struct TaskAnalysisSectionView: View {
                 selectedTaskIDs: section.selectedTaskIDs,
                 noTasksReason: result.noTasksReason
             )
-
-            if !result.decisions.isEmpty {
-                noteGroup(
-                    title: "Decisions",
-                    notes: result.decisions,
-                    isExpanded: section.isDecisionsExpanded,
-                    accessibilityIdentifier: "task-analysis-decisions-toggle",
-                    toggle: controller.toggleDecisionsExpansion
-                )
-            }
-
-            if !result.followUps.isEmpty {
-                noteGroup(
-                    title: "Follow-ups",
-                    notes: result.followUps,
-                    isExpanded: section.isFollowUpsExpanded,
-                    accessibilityIdentifier: "task-analysis-follow-ups-toggle",
-                    toggle: controller.toggleFollowUpsExpansion
-                )
-            }
         }
     }
 
@@ -167,42 +147,6 @@ struct TaskAnalysisSectionView: View {
                         )
 
                         if index < tasks.count - 1 {
-                            Divider()
-                                .overlay(HeedTheme.ColorToken.borderSubtle)
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    private func noteGroup(
-        title: String,
-        notes: [CompiledNote],
-        isExpanded: Bool,
-        accessibilityIdentifier: String,
-        toggle: @escaping () -> Void
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            groupTitle(
-                title,
-                count: notes.count,
-                isExpanded: isExpanded,
-                accessibilityIdentifier: accessibilityIdentifier,
-                toggle: toggle
-            )
-
-            if isExpanded {
-                VStack(alignment: .leading, spacing: 0) {
-                    ForEach(Array(notes.enumerated()), id: \.element.id) { index, note in
-                        NoteRowView(
-                            note: note,
-                            onShowSource: {
-                                controller.showSource(for: note.evidenceSegmentIDs)
-                            }
-                        )
-
-                        if index < notes.count - 1 {
                             Divider()
                                 .overlay(HeedTheme.ColorToken.borderSubtle)
                         }
@@ -325,14 +269,6 @@ private struct TaskRowView: View {
                     .foregroundStyle(HeedTheme.ColorToken.textPrimary.opacity(0.86))
                     .fixedSize(horizontal: false, vertical: true)
 
-                if let assigneeHint = task.assigneeHint {
-                    Text("Assignee hint: \(assigneeHint)")
-                        .font(.system(size: 11, weight: .medium, design: .monospaced))
-                        .foregroundStyle(HeedTheme.ColorToken.textSecondary)
-                }
-
-                evidenceLine(text: task.evidenceExcerpt)
-
                 Button(action: onShowSource) {
                     Text("Show source")
                         .font(.system(size: 11, weight: .medium, design: .monospaced))
@@ -379,55 +315,5 @@ private struct TaskRowView: View {
         case .failed:
             return "Try again"
         }
-    }
-
-    private func evidenceLine(text: String) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Evidence")
-                .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                .foregroundStyle(HeedTheme.ColorToken.textSecondary)
-
-            Text("\"\(text)\"")
-                .font(.system(size: 13, weight: .regular, design: .default))
-                .foregroundStyle(HeedTheme.ColorToken.textPrimary.opacity(0.8))
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-}
-
-private struct NoteRowView: View {
-    let note: CompiledNote
-    let onShowSource: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(note.title)
-                .font(.system(size: 15, weight: .semibold, design: .default))
-                .foregroundStyle(HeedTheme.ColorToken.textPrimary)
-
-            Text(note.details)
-                .font(.system(size: 14, weight: .regular, design: .default))
-                .foregroundStyle(HeedTheme.ColorToken.textPrimary.opacity(0.86))
-                .fixedSize(horizontal: false, vertical: true)
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Evidence")
-                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(HeedTheme.ColorToken.textSecondary)
-
-                Text("\"\(note.evidenceExcerpt)\"")
-                    .font(.system(size: 13, weight: .regular, design: .default))
-                    .foregroundStyle(HeedTheme.ColorToken.textPrimary.opacity(0.8))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            Button(action: onShowSource) {
-                Text("Show source")
-                    .font(.system(size: 11, weight: .medium, design: .monospaced))
-                    .foregroundStyle(HeedTheme.ColorToken.textPrimary.opacity(0.82))
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(.vertical, 14)
     }
 }

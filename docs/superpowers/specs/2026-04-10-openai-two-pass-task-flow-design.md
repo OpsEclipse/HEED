@@ -9,7 +9,7 @@ Turn the current task-review preview into a real LLM-backed flow. After a meetin
 1. The user records and stops as they do today.
 2. The bottom rail shows `Compile tasks` for a completed or recovered session with transcript text.
 3. Clicking `Compile tasks` sends the full transcript to OpenAI with a structured output request.
-4. Heed renders the returned `Tasks`, `Decisions`, and `Follow-ups` inside the existing inline `Suggested tasks` section.
+4. Heed renders the returned `Tasks` inside the existing inline `Suggested tasks` section.
 5. Each task row shows a renamed action. The working label for v1 is `Prepare context`.
 6. Clicking `Prepare context` sends that task plus the full transcript to OpenAI for a second structured output pass.
 7. Heed opens a right-side task context panel without replacing the transcript.
@@ -70,8 +70,6 @@ The first pass should return:
 
 - `summary`
 - `tasks`
-- `decisions`
-- `followUps`
 - `noTasksReason`
 - `warnings`
 
@@ -80,12 +78,12 @@ Each task should include:
 - stable `id`
 - short `title`
 - short `details`
-- `type`
+- `type` with one of `feature`, `bug_fix`, or `miscellaneous`
 - optional `assigneeHint`
 - `evidenceSegmentIDs`
 - `evidenceExcerpt`
 
-This matches the current review UI and lets the app swap the fixture compiler for a real compiler with minimal UI churn.
+The prompt should keep one deliverable grouped into one task. If the transcript describes one feature with many supporting details, the model should return one feature task instead of splitting the work into many feature rows.
 
 ## Pass 2 Output Shape
 

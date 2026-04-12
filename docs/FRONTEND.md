@@ -10,7 +10,7 @@ The app still has one main macOS window today.
 - The sessions list is in a hidden-by-default left sidebar column with a compact tree-style treatment.
 - The main record or stop action lives in one floating yellow button.
 - The window opens at a fixed default size and hides the normal macOS title bar controls.
-- The bottom utility rail shows quiet status text plus `Compile tasks`, `Set API key`, `Copy as text`, and `Full screen` actions when the selected session is eligible for task review.
+- The bottom utility rail keeps the center transport clear, puts `Full screen` on the left, and keeps `Compile tasks`, `Set API key`, and `Copy text` on the right when the selected session is eligible for task review.
 - The controller still has `.txt` and `.md` file export code, but those file export actions are not surfaced in the current shell.
 
 ## Current Implemented States
@@ -36,7 +36,7 @@ The current shell now uses:
 
 - a centered transcript column
 - a compact left sidebar column that reads like a file tree
-- a muted bottom utility rail with text actions
+- a muted bottom utility rail with sparse text actions
 - one empty-state prompt inside the transcript area
 - a floating bottom-center yellow record or stop button
 
@@ -79,11 +79,12 @@ The main record or stop action is one flat floating button.
 The bottom rail stays visually quiet.
 
 - It sits flush with the bottom edge of the window.
-- It shows compact status text like recording state and elapsed time.
+- It keeps the record button centered without extra status copy around it.
+- It puts the fullscreen toggle on the left side.
 - It keeps text-only actions on the right side.
 - It exposes `Compile tasks` only for completed sessions with transcript text.
 - It exposes `Set API key` as a plain-text action.
-- It keeps `Copy as text` and a fullscreen toggle visible beside that action.
+- It keeps `Copy text` visible beside that action.
 
 ### Inline Task Review
 
@@ -91,8 +92,9 @@ The transcript review flow stays in the same reading surface.
 
 - `Compile tasks` expands a collapsible `Suggested tasks` section below the transcript.
 - The section shows quiet status text while OpenAI pass 1 is running.
-- `Tasks` appear first and support checkbox selection.
-- `Decisions` and `Follow-ups` stay collapsed by default and remain read-only.
+- `Tasks` are the only returned result type and support checkbox selection.
+- Each task is labeled as `Feature`, `Bug fix`, or `Miscellaneous`.
+- The compiler should keep one deliverable as one task instead of splitting one feature into many smaller tasks.
 - Each row can use `Show source` to jump back to evidence in the transcript.
 - Each task row now uses `Prepare context` instead of the old placeholder `Spawn agent` action.
 - The current shipped build uses real OpenAI calls in the normal app and fixture data only for UI-test mode.
@@ -134,7 +136,7 @@ The transcript review flow stays in the same reading surface.
 ### Recording
 
 - Keep the transcript anchored as the main object.
-- Make recording state obvious through the button label and utility rail status.
+- Make recording state obvious through the button label.
 - Do not add extra status copy above or below the transcript.
 
 ### Stopping

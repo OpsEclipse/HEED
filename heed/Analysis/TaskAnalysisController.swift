@@ -21,8 +21,6 @@ final class TaskAnalysisController: ObservableObject {
         let isCompiling: Bool
         let result: TaskAnalysisResult?
         let selectedTaskIDs: Set<String>
-        let isDecisionsExpanded: Bool
-        let isFollowUpsExpanded: Bool
         let retryTitle: String?
     }
 
@@ -40,8 +38,6 @@ final class TaskAnalysisController: ObservableObject {
         let isRefreshing: Bool
         let result: TaskAnalysisResult?
         let selectedTaskIDs: Set<String>
-        let isDecisionsExpanded: Bool
-        let isFollowUpsExpanded: Bool
     }
 
     private struct SessionState {
@@ -50,8 +46,6 @@ final class TaskAnalysisController: ObservableObject {
         var isExpanded = true
         var result: TaskAnalysisResult?
         var selectedTaskIDs = Set<String>()
-        var isDecisionsExpanded = false
-        var isFollowUpsExpanded = false
         var compileTask: Task<Void, Never>?
     }
 
@@ -125,8 +119,6 @@ final class TaskAnalysisController: ObservableObject {
             isCompiling: isCompiling(viewState.phase),
             result: viewState.result,
             selectedTaskIDs: viewState.selectedTaskIDs,
-            isDecisionsExpanded: viewState.isDecisionsExpanded,
-            isFollowUpsExpanded: viewState.isFollowUpsExpanded,
             retryTitle: retryTitle
         )
     }
@@ -225,9 +217,7 @@ final class TaskAnalysisController: ObservableObject {
             isExpanded: currentState.isExpanded,
             isRefreshing: currentState.result != nil && isCompiling(currentState.phase),
             result: currentState.result,
-            selectedTaskIDs: currentState.selectedTaskIDs,
-            isDecisionsExpanded: currentState.isDecisionsExpanded,
-            isFollowUpsExpanded: currentState.isFollowUpsExpanded
+            selectedTaskIDs: currentState.selectedTaskIDs
         )
     }
 
@@ -251,34 +241,6 @@ final class TaskAnalysisController: ObservableObject {
         }
 
         togglePanel(for: currentSession)
-    }
-
-    func toggleDecisions(for session: TranscriptSession) {
-        var currentState = state(for: session.id)
-        currentState.isDecisionsExpanded.toggle()
-        sessionStates[session.id] = currentState
-    }
-
-    func toggleDecisionsExpansion() {
-        guard let currentSession else {
-            return
-        }
-
-        toggleDecisions(for: currentSession)
-    }
-
-    func toggleFollowUps(for session: TranscriptSession) {
-        var currentState = state(for: session.id)
-        currentState.isFollowUpsExpanded.toggle()
-        sessionStates[session.id] = currentState
-    }
-
-    func toggleFollowUpsExpansion() {
-        guard let currentSession else {
-            return
-        }
-
-        toggleFollowUps(for: currentSession)
     }
 
     func toggleTaskSelection(taskID: String, for session: TranscriptSession) {
@@ -380,8 +342,6 @@ final class TaskAnalysisController: ObservableObject {
         currentState.result = result
         currentState.isVisible = true
         currentState.isExpanded = true
-        currentState.isDecisionsExpanded = false
-        currentState.isFollowUpsExpanded = false
         currentState.selectedTaskIDs = currentState.selectedTaskIDs.intersection(Set(result.tasks.map(\.id)))
         sessionStates[sessionID] = currentState
     }

@@ -197,8 +197,8 @@ struct heedTests {
         #expect(result.tasks.count == 2)
         #expect(result.tasks[0].title == "Verify the two-way audio path before the next session")
         #expect(result.tasks[1].title == "Review the live source labels in the transcript")
-        #expect(result.decisions.count == 1)
-        #expect(result.followUps.count == 1)
+        #expect(result.tasks.map(\.type.rawValue) == ["Miscellaneous", "Feature"])
+        #expect(result.noTasksReason == nil)
         #expect(result.warnings.first == "Preview only. This build keeps task compilation local while the OpenAI-backed compile path is still in progress.")
     }
 

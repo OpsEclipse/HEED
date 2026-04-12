@@ -84,9 +84,9 @@
 - Why it matters:
   This is the new post-meeting action path, so failures here directly shape whether users trust the app’s AI layer.
 - Main failure modes:
-  Missing API key, network failure, malformed structured output, stale pass 1 results landing on the wrong session, or stale pass 2 results landing on the wrong task.
+  Missing API key, network failure, malformed structured output, one deliverable being split into too many tasks, stale pass 1 results landing on the wrong session, or stale pass 2 results landing on the wrong task.
 - Current confidence:
-  Medium. The app now uses an explicit two-pass OpenAI flow, keeps pass 2 temporary in memory, resets task context on session changes and recompiles, and has tests for structured decoding plus stale task-context requests.
+  Medium. The app now uses an explicit two-pass OpenAI flow, keeps pass 2 temporary in memory, resets task context on session changes and recompiles, and has tests for structured decoding plus stale task-context requests. Pass 1 now returns grouped tasks only with the types `Feature`, `Bug fix`, and `Miscellaneous`.
 - Best next step:
   Add request logging with request IDs, manual network-off checks, and one test double for malformed OpenAI output at the shell level.
 

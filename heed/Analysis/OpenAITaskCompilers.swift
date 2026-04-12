@@ -18,8 +18,6 @@ struct OpenAITaskAnalysisCompiler: TaskAnalysisCompiling {
         return TaskAnalysisResult(
             summary: output.summary.heedCollapsedWhitespace,
             tasks: mapTasks(output.tasks, session: session),
-            decisions: mapNotes(output.decisions, session: session),
-            followUps: mapNotes(output.followUps, session: session),
             noTasksReason: output.noTasksReason.heedNilIfEmpty,
             warnings: output.warnings.map(\.heedCollapsedWhitespace).filter { !$0.isEmpty }
         )
@@ -47,27 +45,6 @@ struct OpenAITaskAnalysisCompiler: TaskAnalysisCompiling {
                 details: item.details.heedCollapsedWhitespace,
                 type: item.type.compiledType,
                 assigneeHint: item.assigneeHint.heedNilIfEmpty,
-                evidenceSegmentIDs: evidence.map(\.id),
-                evidenceExcerpt: resolvedExcerpt(
-                    preferred: item.evidenceExcerpt,
-                    fallbackSegments: evidence.map(\.text),
-                    fallbackText: item.details
-                )
-            )
-        }
-    }
-
-    private func mapNotes(_ items: [TaskAnalysisOutput.NoteItem], session: TranscriptSession) -> [CompiledNote] {
-        var usedIDs = Set<String>()
-
-        return items.map { item in
-            let evidence = resolveEvidence(item.evidenceIndices, session: session)
-            let noteID = uniqueID(from: item.title, usedIDs: &usedIDs)
-
-            return CompiledNote(
-                id: noteID,
-                title: item.title.heedCollapsedWhitespace,
-                details: item.details.heedCollapsedWhitespace,
                 evidenceSegmentIDs: evidence.map(\.id),
                 evidenceExcerpt: resolvedExcerpt(
                     preferred: item.evidenceExcerpt,
@@ -113,6 +90,12 @@ struct OpenAITaskAnalysisCompiler: TaskAnalysisCompiling {
     You turn meeting transcripts into crisp product work.
     Return JSON only.
     Prefer tasks that are directly actionable.
+    Return tasks only. Do not return decisions or follow-up notes.
+    Use feature for new product or engineering deliverables.
+    Use bug_fix for defects, regressions, or broken behavior that should be fixed.
+    Use miscellaneous for non-feature, non-bug action items like emails, calls, coordination, admin work, or manual follow-through.
+    Group supporting details into one task when they describe the same deliverable.
+    Do not split one feature into multiple tasks when the transcript is describing one deliverable.
     Use evidenceIndices as 1-based transcript line references.
     If no action is clear, return an empty tasks array and explain why in noTasksReason.
     """
@@ -131,20 +114,12 @@ struct OpenAITaskAnalysisCompiler: TaskAnalysisCompiling {
     private static let schema: [String: Any] = [
         "type": "object",
         "additionalProperties": false,
-        "required": ["summary", "tasks", "decisions", "followUps", "noTasksReason", "warnings"],
+        "required": ["summary", "tasks", "noTasksReason", "warnings"],
         "properties": [
             "summary": ["type": "string"],
             "tasks": [
                 "type": "array",
                 "items": taskItemSchema
-            ],
-            "decisions": [
-                "type": "array",
-                "items": noteItemSchema
-            ],
-            "followUps": [
-                "type": "array",
-                "items": noteItemSchema
             ],
             "noTasksReason": ["type": "string"],
             "warnings": [
@@ -163,24 +138,9 @@ struct OpenAITaskAnalysisCompiler: TaskAnalysisCompiling {
             "details": ["type": "string"],
             "type": [
                 "type": "string",
-                "enum": ["feature", "bug", "follow_up"]
+                "enum": ["feature", "bug_fix", "miscellaneous"]
             ],
             "assigneeHint": ["type": "string"],
-            "evidenceIndices": [
-                "type": "array",
-                "items": ["type": "integer"]
-            ],
-            "evidenceExcerpt": ["type": "string"]
-        ]
-    ]
-
-    private static let noteItemSchema: [String: Any] = [
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["title", "details", "evidenceIndices", "evidenceExcerpt"],
-        "properties": [
-            "title": ["type": "string"],
-            "details": ["type": "string"],
             "evidenceIndices": [
                 "type": "array",
                 "items": ["type": "integer"]
@@ -359,8 +319,6 @@ struct TaskContextFixtureCompiler: TaskContextCompiling {
 private struct TaskAnalysisOutput: Decodable {
     let summary: String
     let tasks: [TaskItem]
-    let decisions: [NoteItem]
-    let followUps: [NoteItem]
     let noTasksReason: String
     let warnings: [String]
 
@@ -373,26 +331,19 @@ private struct TaskAnalysisOutput: Decodable {
         let evidenceExcerpt: String
     }
 
-    struct NoteItem: Decodable {
-        let title: String
-        let details: String
-        let evidenceIndices: [Int]
-        let evidenceExcerpt: String
-    }
-
     enum TaskKind: String, Decodable {
         case feature
-        case bug
-        case followUp = "follow_up"
+        case bugFix = "bug_fix"
+        case miscellaneous
 
         var compiledType: TaskType {
             switch self {
             case .feature:
                 return .feature
-            case .bug:
-                return .bug
-            case .followUp:
-                return .followUp
+            case .bugFix:
+                return .bugFix
+            case .miscellaneous:
+                return .miscellaneous
             }
         }
     }

@@ -80,10 +80,11 @@ struct WorkspaceShell: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                 UtilityRailView(
-                    primaryStatus: controller.state.statusText,
+                    primaryStatus: utilityPrimaryStatus,
                     secondaryStatus: utilitySecondaryStatus,
                     details: utilityDetails,
-                    actions: utilityActions
+                    leadingActions: leadingUtilityActions,
+                    trailingActions: trailingUtilityActions
                 ) {
                     FloatingTransportView(
                         recordingState: controller.state,
@@ -121,22 +122,31 @@ struct WorkspaceShell: View {
         }
     }
 
-    private var utilitySecondaryStatus: String? {
-        if controller.state == .recording || controller.state == .stopping {
-            return controller.elapsedTime.heedClockString
-        }
-
-        return displayedSession?.duration.heedClockString
+    var utilityPrimaryStatus: String? {
+        nil
     }
 
-    private var utilityDetails: [UtilityRailView.Detail] {
+    var utilitySecondaryStatus: String? {
+        nil
+    }
+
+    var utilityDetails: [UtilityRailView.Detail] {
+        []
+    }
+
+    var leadingUtilityActions: [UtilityRailView.Action] {
         [
-            .init(label: "Mode", value: "Mic + system"),
-            .init(label: "Auto-scroll", value: controller.autoScrollEnabled ? "On" : "Off")
+            .init(
+                id: "fullscreen",
+                title: windowController.isFullScreen ? "Exit full screen" : "Full screen",
+                accessibilityIdentifier: "fullscreen-toggle"
+            ) {
+                windowController.toggleFullScreen()
+            }
         ]
     }
 
-    private var utilityActions: [UtilityRailView.Action] {
+    var trailingUtilityActions: [UtilityRailView.Action] {
         var actions: [UtilityRailView.Action] = []
 
         if let compileActionTitle = taskAnalysisController.compileActionTitle,
@@ -167,21 +177,11 @@ struct WorkspaceShell: View {
         actions.append(
             .init(
                 id: "copy",
-                title: "Copy as text",
+                title: "Copy text",
                 isEnabled: displayedSession != nil,
                 accessibilityIdentifier: "copy-as-text"
             ) {
                 controller.copySelectedSession()
-            }
-        )
-
-        actions.append(
-            .init(
-                id: "fullscreen",
-                title: windowController.isFullScreen ? "Exit full screen" : "Full screen",
-                accessibilityIdentifier: "fullscreen-toggle"
-            ) {
-                windowController.toggleFullScreen()
             }
         )
 

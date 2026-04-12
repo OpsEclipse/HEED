@@ -63,7 +63,7 @@ The current local meeting-transcript pipeline is:
 6. Session store
    Saves transcript sessions and keeps crash loss small.
 7. OpenAI task pipeline
-   Sends transcript text to OpenAI only after the user clicks `Compile tasks` or a task-level context action. Pass 1 builds `Tasks`, `Decisions`, and `Follow-ups`. Pass 2 builds temporary task context for one selected task. API-key entry lives in the UI, but the secret is stored in Keychain.
+   Sends transcript text to OpenAI only after the user clicks `Compile tasks` or a task-level context action. Pass 1 builds grouped `Tasks` only, using the types `Feature`, `Bug fix`, and `Miscellaneous`. Pass 2 builds temporary task context for one selected task. API-key entry lives in the UI, but the secret is stored in Keychain.
 8. Export layer
    Builds clipboard, text-file, and Markdown-file transcript output. The refreshed shell currently surfaces clipboard copy, while file export still lives in the controller layer and is not wired into the current UI.
 

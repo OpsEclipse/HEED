@@ -18,7 +18,7 @@ Important current facts:
 
 - The app is a single `WindowGroup`.
 - The current shell is transcript-first. It centers the transcript, hides the sidebar by default, and keeps the main record or stop action in one compact floating button.
-- The bottom utility rail shows status, `Set API key`, `Copy as text`, and a fullscreen toggle. It also shows `Compile tasks` when the selected session is eligible.
+- The bottom utility rail keeps the record button centered, puts a fullscreen toggle on the left, and keeps `Set API key` plus `Copy text` on the right. It also shows `Compile tasks` when the selected session is eligible.
 - The project uses generated Info.plist values, not a checked-in `Info.plist`.
 - The app target deploys to macOS `14.0`.
 - App Sandbox [a macOS restriction layer] and Hardened Runtime [extra macOS runtime protections] are enabled.

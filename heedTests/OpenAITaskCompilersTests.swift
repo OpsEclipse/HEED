@@ -12,7 +12,7 @@ struct OpenAITaskCompilersTests {
                   "content": [
                     {
                       "type": "output_text",
-                      "text": "{\\"summary\\":\\"The meeting focused on shipping task compilation.\\",\\"tasks\\":[{\\"title\\":\\"Implement OpenAI compile flow\\",\\"details\\":\\"Replace the fixture compiler with a real OpenAI request.\\",\\"type\\":\\"feature\\",\\"assigneeHint\\":\\"Mac engineer\\",\\"evidenceIndices\\":[2],\\"evidenceExcerpt\\":\\"We need compile tasks to actually send the transcript to an LLM.\\"}],\\"decisions\\":[{\\"title\\":\\"Use GPT-5.4 mini for task compilation\\",\\"details\\":\\"Start with the faster network model for v1.\\",\\"evidenceIndices\\":[1],\\"evidenceExcerpt\\":\\"For the tasks let's use GPT 5.4 Mini.\\"}],\\"followUps\\":[{\\"title\\":\\"Add a settings surface for the API key\\",\\"details\\":\\"Expose a plain-text action in the bottom rail.\\",\\"evidenceIndices\\":[3],\\"evidenceExcerpt\\":\\"Let's make a button on the bottom for set api key.\\"}],\\"noTasksReason\\":\\"\\",\\"warnings\\":[]}"
+                      "text": "{\\"summary\\":\\"The meeting focused on shipping task compilation.\\",\\"tasks\\":[{\\"title\\":\\"Implement OpenAI compile flow\\",\\"details\\":\\"Replace the fixture compiler with a real OpenAI request and keep the feature work grouped into one deliverable.\\",\\"type\\":\\"feature\\",\\"assigneeHint\\":\\"Mac engineer\\",\\"evidenceIndices\\":[2,3],\\"evidenceExcerpt\\":\\"We need compile tasks to actually send the transcript to an LLM.\\"},{\\"title\\":\\"Fix the stale task panel state\\",\\"details\\":\\"Stop old task-context responses from landing on the newly selected task.\\",\\"type\\":\\"bug_fix\\",\\"assigneeHint\\":\\"Mac engineer\\",\\"evidenceIndices\\":[4],\\"evidenceExcerpt\\":\\"Sometimes the previous task stays selected after reload.\\"},{\\"title\\":\\"Email the rollout note to support\\",\\"details\\":\\"Send a short update once the compile flow ships.\\",\\"type\\":\\"miscellaneous\\",\\"assigneeHint\\":\\"Product lead\\",\\"evidenceIndices\\":[5],\\"evidenceExcerpt\\":\\"After it ships, send support a note.\\"}],\\"noTasksReason\\":\\"\\",\\"warnings\\":[]}"
                     }
                   ]
                 }
@@ -32,13 +32,46 @@ struct OpenAITaskCompilersTests {
         let result = try await compiler.compile(session: session)
 
         #expect(result.summary == "The meeting focused on shipping task compilation.")
-        #expect(result.tasks.count == 1)
+        #expect(result.tasks.count == 3)
         #expect(result.tasks[0].title == "Implement OpenAI compile flow")
-        #expect(result.tasks[0].evidenceSegmentIDs == [session.segments[1].id])
-        #expect(result.decisions.first?.evidenceSegmentIDs == [session.segments[0].id])
-        #expect(result.followUps.first?.evidenceSegmentIDs == [session.segments[2].id])
+        #expect(result.tasks[0].evidenceSegmentIDs == [session.segments[1].id, session.segments[2].id])
+        #expect(result.tasks.map(\.type.rawValue) == ["Feature", "Bug fix", "Miscellaneous"])
+        #expect(result.noTasksReason == nil)
 
         #expect(await transport.lastRequestedModel() == "gpt-5.4-mini")
+    }
+
+    @Test func taskAnalysisCompilerRequestAsksToKeepOneFeatureGroupedIntoOneTask() async throws {
+        let transport = StubOpenAITransport(
+            data: """
+            {
+              "output": [
+                {
+                  "content": [
+                    {
+                      "type": "output_text",
+                      "text": "{\\"summary\\":\\"One feature was discussed.\\",\\"tasks\\":[],\\"noTasksReason\\":\\"\\",\\"warnings\\":[]}"
+                    }
+                  ]
+                }
+              ]
+            }
+            """,
+            statusCode: 200
+        )
+        let compiler = OpenAITaskAnalysisCompiler(
+            client: OpenAIResponsesClient(
+                apiKeyProvider: { "sk-test" },
+                transport: transport
+            )
+        )
+
+        _ = try await compiler.compile(session: sampleTranscriptSession())
+
+        let systemPrompt = await transport.lastRequestedInputText(role: "system")
+
+        #expect(systemPrompt?.contains("Do not split one feature into multiple tasks") == true)
+        #expect(systemPrompt?.contains("Use miscellaneous for non-feature, non-bug action items") == true)
     }
 
     @Test func taskContextCompilerMapsEvidenceIntoPanelContent() async throws {
@@ -117,6 +150,21 @@ private actor StubOpenAITransport: OpenAIResponsesTransport {
 
         return object["model"] as? String
     }
+
+    func lastRequestedInputText(role: String) -> String? {
+        guard let body = requests.last?.httpBody,
+              let object = try? JSONSerialization.jsonObject(with: body) as? [String: Any],
+              let input = object["input"] as? [[String: Any]] else {
+            return nil
+        }
+
+        guard let message = input.first(where: { ($0["role"] as? String) == role }),
+              let content = message["content"] as? [[String: Any]] else {
+            return nil
+        }
+
+        return content.compactMap { $0["text"] as? String }.joined(separator: "\n")
+    }
 }
 
 private func sampleTranscriptSession() -> TranscriptSession {
@@ -130,7 +178,9 @@ private func sampleTranscriptSession() -> TranscriptSession {
         segments: [
             TranscriptSegment(source: .mic, startedAt: 1, endedAt: 2, text: "For the tasks let's use GPT 5.4 Mini."),
             TranscriptSegment(source: .system, startedAt: 3, endedAt: 4, text: "We need compile tasks to actually send the transcript to an LLM."),
-            TranscriptSegment(source: .mic, startedAt: 5, endedAt: 6, text: "Let's make a button on the bottom for set api key.")
+            TranscriptSegment(source: .mic, startedAt: 5, endedAt: 6, text: "The whole feature should stay grouped into one implementation task."),
+            TranscriptSegment(source: .system, startedAt: 7, endedAt: 8, text: "Sometimes the previous task stays selected after reload."),
+            TranscriptSegment(source: .mic, startedAt: 9, endedAt: 10, text: "After it ships, send support a note.")
         ]
     )
 }

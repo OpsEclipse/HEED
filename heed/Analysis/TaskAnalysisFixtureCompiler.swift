@@ -60,7 +60,7 @@ struct TaskAnalysisFixtureCompiler: TaskAnalysisCompiling {
                     id: "verify-audio-paths",
                     title: "Verify the two-way audio path before the next session",
                     details: "Run one more quick check that the microphone and remote call audio both stay readable in the transcript.",
-                    type: .followUp,
+                    type: .miscellaneous,
                     assigneeHint: nil,
                     evidenceSegmentIDs: [secondSegment?.id, firstSegment?.id].compactMap { $0 },
                     evidenceExcerpt: secondSegment?.text ?? firstSegment?.text ?? "Audio capture was reviewed."
@@ -75,45 +75,15 @@ struct TaskAnalysisFixtureCompiler: TaskAnalysisCompiling {
                     evidenceExcerpt: thirdSegment?.text ?? "Source labels were discussed."
                 )
             ],
-            decisions: [
-                CompiledNote(
-                    id: "remote-audio-confirmed",
-                    title: "Remote call audio is coming through",
-                    details: "The team confirmed that the system-audio side of the call was audible.",
-                    evidenceSegmentIDs: [secondSegment?.id].compactMap { $0 },
-                    evidenceExcerpt: secondSegment?.text ?? "Remote call audio is coming through."
-                )
-            ],
-            followUps: [
-                CompiledNote(
-                    id: "keep-shell-readable",
-                    title: "Keep the live transcript easy to read",
-                    details: "The team wants the transcript shell to stay clear while showing separate source labels.",
-                    evidenceSegmentIDs: [thirdSegment?.id].compactMap { $0 },
-                    evidenceExcerpt: thirdSegment?.text ?? "Heed is showing separate live labels."
-                )
-            ],
             noTasksReason: nil,
             warnings: ["Preview only. This build keeps task compilation local while the OpenAI-backed compile path is still in progress."]
         )
     }
 
     nonisolated private func makeEmptyResult(from session: TranscriptSession) -> TaskAnalysisResult {
-        let firstSegment = session.segments.first
-
         return TaskAnalysisResult(
             summary: "The meeting mostly confirmed status and did not state a clear next action.",
             tasks: [],
-            decisions: [
-                CompiledNote(
-                    id: "status-check",
-                    title: "Audio status was confirmed",
-                    details: "The transcript shows a quick confirmation that the setup was working.",
-                    evidenceSegmentIDs: [firstSegment?.id].compactMap { $0 },
-                    evidenceExcerpt: firstSegment?.text ?? "The setup was confirmed."
-                )
-            ],
-            followUps: [],
             noTasksReason: "No clear tasks found",
             warnings: ["Preview only. This build keeps task compilation local while the OpenAI-backed compile path is still in progress."]
         )
@@ -121,6 +91,7 @@ struct TaskAnalysisFixtureCompiler: TaskAnalysisCompiling {
 }
 
 private extension Array {
+    nonisolated
     subscript(safe index: Int) -> Element? {
         guard indices.contains(index) else {
             return nil

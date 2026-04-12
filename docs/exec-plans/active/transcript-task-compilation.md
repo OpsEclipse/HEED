@@ -2,7 +2,7 @@
 
 ## Goal
 
-Turn Heed's current task-review preview into a real two-pass OpenAI workflow. After the user stops recording, they can click `Compile tasks` to send the transcript to OpenAI and get structured `Tasks`, `Decisions`, and `Follow-ups`. When they choose one task, Heed runs a second OpenAI pass, opens a right-side task context panel, and only then shows the real `Spawn agent` action.
+Turn Heed's current task-review preview into a real two-pass OpenAI workflow. After the user stops recording, they can click `Compile tasks` to send the transcript to OpenAI and get grouped `Tasks` only. Each returned task should be one `Feature`, `Bug fix`, or `Miscellaneous` item. When they choose one task, Heed runs a second OpenAI pass, opens a right-side task context panel, and only then shows the real `Spawn agent` action.
 
 ## Scope
 
@@ -54,7 +54,9 @@ Turn Heed's current task-review preview into a real two-pass OpenAI workflow. Af
 - Click `Set API key`, enter a key through the settings UI, relaunch if needed, and confirm the app can use that stored key.
 - Click `Compile tasks` and confirm the `Suggested tasks` section appears under the transcript without hiding earlier transcript text.
 - Confirm the busy state disables duplicate compile requests.
-- Confirm a successful first-pass response renders `Tasks`, `Decisions`, and `Follow-ups`, with only `Tasks` expanded by default.
+- Confirm a successful first-pass response renders only `Tasks`.
+- Confirm each task is labeled as `Feature`, `Bug fix`, or `Miscellaneous`.
+- Confirm one feature request with many supporting details stays grouped into one task when it describes one deliverable.
 - Confirm each result row can show an evidence excerpt and jump back to the source transcript segment.
 - Confirm each task row uses the renamed second-pass action instead of the old `Spawn agent` label.
 - Click the second-pass action and confirm a right-side context panel opens without replacing the transcript.
