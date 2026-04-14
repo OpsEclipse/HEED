@@ -102,8 +102,9 @@ The task review UI should feel attached to the transcript, like margin notes gat
 
 - Keep it inline in the reading column.
 - Use one restrained panel surface so it reads as reviewed output, not live transcript text.
-- Put `Tasks` first because they are the actionable part.
-- Keep `Decisions` and `Follow-ups` collapsed by default so the appendix stays compact.
+- Keep `Tasks` as the only returned content because they are the actionable part.
+- Let task type badges show `Feature`, `Bug fix`, or `Miscellaneous`.
+- Keep one deliverable grouped into one task so the appendix reads like a clean work list instead of fragmented notes.
 - Use source jumps and brief transcript highlighting to connect the appendix back to the transcript evidence.
 
 ## Current Design System Rules

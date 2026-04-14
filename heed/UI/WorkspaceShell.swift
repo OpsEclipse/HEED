@@ -5,7 +5,10 @@ import SwiftUI
 struct WorkspaceShell: View {
     @ObservedObject var controller: RecordingController
     @ObservedObject var taskAnalysisController: TaskAnalysisController
+    @ObservedObject var taskContextController: TaskContextController
+    @ObservedObject var apiKeySettingsViewModel: APIKeySettingsViewModel
     @State private var isSidebarVisible = false
+    @State private var isAPIKeySettingsPresented = false
     @StateObject private var windowController = WorkspaceWindowController()
 
     private var displayedSession: TranscriptSession? {
@@ -33,35 +36,55 @@ struct WorkspaceShell: View {
                     }
 
                     ZStack(alignment: .topLeading) {
-                        HeedTheme.ColorToken.canvas
-                            .ignoresSafeArea()
+                        HStack(alignment: .top, spacing: 0) {
+                            ZStack(alignment: .topLeading) {
+                                HeedTheme.ColorToken.canvas
+                                    .ignoresSafeArea()
 
-                        TranscriptCanvasView(
-                            state: controller.state,
-                            session: displayedSession,
-                            segments: displayedSegments,
-                            sourceJumpRequest: taskAnalysisController.sourceJumpRequest,
-                            highlightedSegmentID: taskAnalysisController.highlightedSegmentID,
-                            appendixFocusNonce: taskAnalysisController.sectionFocusNonce,
-                            autoScrollEnabled: $controller.autoScrollEnabled
-                        ) {
-                            TaskAnalysisSectionView(controller: taskAnalysisController)
-                                .padding(.top, displayedSegments.isEmpty ? 6 : 16)
+                                TranscriptCanvasView(
+                                    state: controller.state,
+                                    session: displayedSession,
+                                    segments: displayedSegments,
+                                    sourceJumpRequest: taskAnalysisController.sourceJumpRequest,
+                                    highlightedSegmentID: taskAnalysisController.highlightedSegmentID,
+                                    appendixFocusNonce: taskAnalysisController.sectionFocusNonce,
+                                    autoScrollEnabled: $controller.autoScrollEnabled
+                                ) {
+                                    TaskAnalysisSectionView(
+                                        controller: taskAnalysisController,
+                                        taskContextController: taskContextController,
+                                        displayedSession: displayedSession
+                                    )
+                                    .padding(.top, displayedSegments.isEmpty ? 6 : 16)
+                                }
+
+                                SidebarToggleButton(isSidebarVisible: $isSidebarVisible)
+                                    .padding(.top, 20)
+                                    .padding(.leading, 20)
+                            }
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                            if isTaskContextPanelVisible {
+                                TaskContextPanelView(
+                                    presentation: TaskContextPanelPresentation(state: taskContextController.panelState),
+                                    onPrimaryAction: handleTaskContextPrimaryAction,
+                                    onSecondaryAction: handleTaskContextSecondaryAction,
+                                    onClose: taskContextController.reset
+                                )
+                                .transition(.move(edge: .trailing).combined(with: .opacity))
+                            }
                         }
-
-                        SidebarToggleButton(isSidebarVisible: $isSidebarVisible)
-                            .padding(.top, 20)
-                            .padding(.leading, 20)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                 UtilityRailView(
-                    primaryStatus: controller.state.statusText,
+                    primaryStatus: utilityPrimaryStatus,
                     secondaryStatus: utilitySecondaryStatus,
                     details: utilityDetails,
-                    actions: utilityActions
+                    leadingActions: leadingUtilityActions,
+                    trailingActions: trailingUtilityActions
                 ) {
                     FloatingTransportView(
                         recordingState: controller.state,
@@ -71,6 +94,7 @@ struct WorkspaceShell: View {
                 }
             }
             .animation(.easeOut(duration: 0.22), value: isSidebarVisible)
+            .heedHiddenWindowScrollBars()
             .background(HeedTheme.ColorToken.canvas.ignoresSafeArea())
             .background {
                 WindowAccessView { window in
@@ -82,6 +106,7 @@ struct WorkspaceShell: View {
             }
             .onChange(of: displayedSession?.id) {
                 taskAnalysisController.updateDisplayedSession(displayedSession)
+                taskContextController.reset()
             }
             .onChange(of: displayedSession?.segments.count) {
                 taskAnalysisController.updateDisplayedSession(displayedSession)
@@ -89,25 +114,39 @@ struct WorkspaceShell: View {
             .onChange(of: displayedSession?.status) {
                 taskAnalysisController.updateDisplayedSession(displayedSession)
             }
+            .sheet(isPresented: $isAPIKeySettingsPresented) {
+                APIKeySettingsView(viewModel: apiKeySettingsViewModel) {
+                    isAPIKeySettingsPresented = false
+                }
+            }
         }
     }
 
-    private var utilitySecondaryStatus: String? {
-        if controller.state == .recording || controller.state == .stopping {
-            return controller.elapsedTime.heedClockString
-        }
-
-        return displayedSession?.duration.heedClockString
+    var utilityPrimaryStatus: String? {
+        nil
     }
 
-    private var utilityDetails: [UtilityRailView.Detail] {
+    var utilitySecondaryStatus: String? {
+        nil
+    }
+
+    var utilityDetails: [UtilityRailView.Detail] {
+        []
+    }
+
+    var leadingUtilityActions: [UtilityRailView.Action] {
         [
-            .init(label: "Mode", value: "Mic + system"),
-            .init(label: "Auto-scroll", value: controller.autoScrollEnabled ? "On" : "Off")
+            .init(
+                id: "fullscreen",
+                title: windowController.isFullScreen ? "Exit full screen" : "Full screen",
+                accessibilityIdentifier: "fullscreen-toggle"
+            ) {
+                windowController.toggleFullScreen()
+            }
         ]
     }
 
-    private var utilityActions: [UtilityRailView.Action] {
+    var trailingUtilityActions: [UtilityRailView.Action] {
         var actions: [UtilityRailView.Action] = []
 
         if let compileActionTitle = taskAnalysisController.compileActionTitle,
@@ -119,6 +158,7 @@ struct WorkspaceShell: View {
                     isEnabled: taskAnalysisController.isCompileActionEnabled,
                     accessibilityIdentifier: "compile-tasks"
                 ) {
+                    taskContextController.reset()
                     taskAnalysisController.handleCompileAction()
                 }
             )
@@ -126,8 +166,18 @@ struct WorkspaceShell: View {
 
         actions.append(
             .init(
+                id: "set-api-key",
+                title: "Set API key",
+                accessibilityIdentifier: "set-api-key"
+            ) {
+                isAPIKeySettingsPresented = true
+            }
+        )
+
+        actions.append(
+            .init(
                 id: "copy",
-                title: "Copy as text",
+                title: "Copy text",
                 isEnabled: displayedSession != nil,
                 accessibilityIdentifier: "copy-as-text"
             ) {
@@ -135,17 +185,31 @@ struct WorkspaceShell: View {
             }
         )
 
-        actions.append(
-            .init(
-                id: "fullscreen",
-                title: windowController.isFullScreen ? "Exit full screen" : "Full screen",
-                accessibilityIdentifier: "fullscreen-toggle"
-            ) {
-                windowController.toggleFullScreen()
-            }
-        )
-
         return actions
+    }
+
+    private var isTaskContextPanelVisible: Bool {
+        if case .idle = taskContextController.panelState {
+            return false
+        }
+
+        return true
+    }
+
+    private func handleTaskContextPrimaryAction() {
+        guard let taskID = taskContextController.selectedTaskID else {
+            return
+        }
+
+        taskAnalysisController.requestSpawnAgent(for: taskID)
+    }
+
+    private func handleTaskContextSecondaryAction() {
+        guard let displayedSession, let selectedTask = taskContextController.selectedTask else {
+            return
+        }
+
+        taskContextController.prepareTaskContext(for: selectedTask, in: displayedSession)
     }
 }
 
@@ -212,10 +276,7 @@ private final class WorkspaceWindowController: ObservableObject {
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor in
-                guard let self else {
-                    return
-                }
-                self.updateFullScreenState(true)
+                self?.updateFullScreenState(true)
             }
         }
 
@@ -225,10 +286,7 @@ private final class WorkspaceWindowController: ObservableObject {
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor in
-                guard let self else {
-                    return
-                }
-                self.updateFullScreenState(false)
+                self?.updateFullScreenState(false)
             }
         }
     }
@@ -248,7 +306,6 @@ private struct SidebarToggleButton: View {
         .foregroundStyle(HeedTheme.ColorToken.textSecondary)
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .background(HeedTheme.ColorToken.canvas.opacity(0.9))
         .accessibilityIdentifier("sidebar-toggle")
     }
 }

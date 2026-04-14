@@ -97,6 +97,7 @@ private struct TranscriptScroller<Appendix: View>: View {
                 }
                 .padding(.bottom, 24)
             }
+            .heedHiddenScrollBars()
             .scrollIndicators(.hidden)
             .onChange(of: segments.count) {
                 guard autoScrollEnabled else {

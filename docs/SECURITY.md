@@ -38,6 +38,24 @@
 - Guardrail:
   Make export a clear user action, not an automatic side effect.
 
+## OpenAI Task Calls
+
+- Risk:
+  Finished transcript text can leave the machine when the user runs task actions.
+- Current posture:
+  The app now makes outbound OpenAI calls only after the user clicks `Compile tasks` or `Prepare context`. The API key is entered through the UI and stored in Keychain, not in saved session JSON.
+- Guardrail:
+  Keep every transcript upload user-triggered, keep task context temporary by default, and never send audio.
+
+## API Key Storage
+
+- Risk:
+  A leaked API key can expose billing and data access.
+- Current posture:
+  The app stores the OpenAI API key in Keychain and exposes a plain-text `Set API key` action in the utility rail that opens a dedicated settings sheet.
+- Guardrail:
+  Keep secrets out of source control, out of session files, and out of debug UI.
+
 ## Model Files
 
 - Risk:
@@ -55,8 +73,8 @@ Real security-relevant facts from the project today:
 - Hardened Runtime is enabled.
 - Generated Info.plist is enabled.
 - Privacy usage strings for microphone, screen capture, and system audio are present in build settings.
-- The checked-in entitlements file enables App Sandbox and microphone input. Screen recording uses the macOS privacy prompt flow here, not a separate checked-in entitlement.
-- No network client is present in app code today.
+- The checked-in entitlements file enables App Sandbox, microphone input, and outbound network access. Screen recording uses the macOS privacy prompt flow here, not a separate checked-in entitlement.
+- The app now has a network client for explicit OpenAI task calls.
 - Transcript storage lives under Application Support.
 - The Whisper model download URL is `https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin`.
 - The current docs record the downloaded model checksum as `a03779c86df3323075f5e796cb2ce5029f00ec8869eee3fdfb897afe36c6d002`, but the build step does not enforce that checksum yet.
@@ -65,11 +83,13 @@ Real security-relevant facts from the project today:
 
 - Screen recording is still a broad permission and needs careful user explanation.
 - Export can move sensitive text outside the app sandbox.
+- The new OpenAI path sends transcript text over the network, so the user-triggered boundary must stay clear.
+- API key handling now depends on Keychain staying the only secret store.
 - The build-time model download should still add explicit checksum verification in code, not docs alone.
 
 ## Security Posture Summary
 
-The repo now has the core product-specific controls in place. The biggest remaining issue is hardening the build-time model download path and expanding real-world permission recovery checks.
+The repo now has the core product-specific controls in place. The biggest remaining issues are hardening the build-time model download path, keeping the new OpenAI boundary explicit and user-controlled, and expanding real-world permission recovery checks.
 
 ## Rules For Future Work
 
@@ -77,3 +97,4 @@ The repo now has the core product-specific controls in place. The biggest remain
 - Keep transcription local unless a user-visible feature explicitly requires network use.
 - Do not add silent background uploads of audio or transcript content.
 - Document every new permission, saved-data path, and export path in this file.
+- Treat API keys as secrets and keep them in Keychain or an equally strong system store.

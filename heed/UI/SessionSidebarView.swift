@@ -22,6 +22,7 @@ struct SessionSidebarView: View {
                     .padding(.horizontal, 8)
                     .padding(.vertical, 10)
                 }
+                .heedHiddenScrollBars()
                 .scrollIndicators(.hidden)
             }
         }

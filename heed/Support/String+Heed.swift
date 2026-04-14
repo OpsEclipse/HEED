@@ -5,6 +5,26 @@ extension String {
         split(whereSeparator: \.isWhitespace).joined(separator: " ")
     }
 
+    nonisolated var heedNilIfEmpty: String? {
+        let candidate = heedCollapsedWhitespace
+        return candidate.isEmpty ? nil : candidate
+    }
+
+    nonisolated var heedSlugified: String {
+        let collapsed = heedCollapsedWhitespace.lowercased()
+        let scalars = collapsed.unicodeScalars.map { scalar -> Character in
+            if CharacterSet.alphanumerics.contains(scalar) {
+                return Character(scalar)
+            }
+
+            return "-"
+        }
+
+        let rawSlug = String(scalars)
+        let parts = rawSlug.split(separator: "-").map(String.init)
+        return parts.joined(separator: "-")
+    }
+
     nonisolated func trimmingSharedPrefix(with previousTail: String) -> String {
         let candidate = heedCollapsedWhitespace
         let previous = previousTail.heedCollapsedWhitespace

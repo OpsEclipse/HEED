@@ -1,23 +1,26 @@
 import SwiftUI
 
 struct UtilityRailView: View {
-    let primaryStatus: String
+    let primaryStatus: String?
     let secondaryStatus: String?
     let details: [Detail]
-    let actions: [Action]
+    let leadingActions: [Action]
+    let trailingActions: [Action]
     let primaryControl: AnyView
 
     init<PrimaryControl: View>(
-        primaryStatus: String,
+        primaryStatus: String?,
         secondaryStatus: String?,
         details: [Detail],
-        actions: [Action],
+        leadingActions: [Action] = [],
+        trailingActions: [Action],
         @ViewBuilder primaryControl: () -> PrimaryControl
     ) {
         self.primaryStatus = primaryStatus
         self.secondaryStatus = secondaryStatus
         self.details = details
-        self.actions = actions
+        self.leadingActions = leadingActions
+        self.trailingActions = trailingActions
         self.primaryControl = AnyView(primaryControl())
     }
 
@@ -39,37 +42,52 @@ struct UtilityRailView: View {
 
     private var regularLayout: some View {
         HStack(alignment: .center, spacing: 20) {
-            statusBlock
+            leadingSection
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             primaryControl
                 .fixedSize()
 
-            actionRow
+            trailingActionRow
                 .frame(maxWidth: .infinity, alignment: .trailing)
         }
     }
 
     private var compactLayout: some View {
         VStack(alignment: .leading, spacing: 14) {
-            statusBlock
+            if hasLeadingContent {
+                leadingSection
+            }
             primaryControl
-                .frame(maxWidth: .infinity, alignment: .leading)
-            compactActionColumn
+                .frame(maxWidth: .infinity, alignment: .center)
+            compactTrailingActionColumn
+        }
+    }
+
+    @ViewBuilder
+    private var leadingSection: some View {
+        if hasStatusContent {
+            statusBlock
+        } else {
+            leadingActionRow
         }
     }
 
     private var statusBlock: some View {
         VStack(alignment: .leading, spacing: 5) {
-            HStack(spacing: 10) {
-                Text(primaryStatus)
-                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(UtilityRailPalette.primaryText)
+            if primaryStatus?.isEmpty == false || secondaryStatus?.isEmpty == false {
+                HStack(spacing: 10) {
+                    if let primaryStatusText = primaryStatus, !primaryStatusText.isEmpty {
+                        Text(primaryStatusText)
+                            .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                            .foregroundStyle(UtilityRailPalette.primaryText)
+                    }
 
-                if let secondaryStatus, !secondaryStatus.isEmpty {
-                    Text(secondaryStatus)
-                        .font(.system(size: 11, weight: .medium, design: .monospaced))
-                        .foregroundStyle(UtilityRailPalette.secondaryText)
+                    if let secondaryStatusText = secondaryStatus, !secondaryStatusText.isEmpty {
+                        Text(secondaryStatusText)
+                            .font(.system(size: 11, weight: .medium, design: .monospaced))
+                            .foregroundStyle(UtilityRailPalette.secondaryText)
+                    }
                 }
             }
 
@@ -82,17 +100,25 @@ struct UtilityRailView: View {
         }
     }
 
-    private var actionRow: some View {
+    private var leadingActionRow: some View {
         HStack(spacing: 14) {
-            ForEach(actions) { action in
+            ForEach(leadingActions) { action in
                 actionButton(for: action)
             }
         }
     }
 
-    private var compactActionColumn: some View {
+    private var trailingActionRow: some View {
+        HStack(spacing: 14) {
+            ForEach(trailingActions) { action in
+                actionButton(for: action)
+            }
+        }
+    }
+
+    private var compactTrailingActionColumn: some View {
         VStack(alignment: .leading, spacing: 8) {
-            ForEach(actions) { action in
+            ForEach(trailingActions) { action in
                 actionButton(for: action)
             }
         }
@@ -117,6 +143,16 @@ struct UtilityRailView: View {
             .map(\.displayText)
             .filter { !$0.isEmpty }
             .joined(separator: "  •  ")
+    }
+
+    private var hasStatusContent: Bool {
+        let hasPrimary = primaryStatus?.isEmpty == false
+        let hasSecondary = secondaryStatus?.isEmpty == false
+        return hasPrimary || hasSecondary || !detailLine.isEmpty
+    }
+
+    private var hasLeadingContent: Bool {
+        hasStatusContent || !leadingActions.isEmpty
     }
 }
 
@@ -203,15 +239,15 @@ private enum UtilityRailPalette {
 
 #Preview("Regular") {
     UtilityRailView(
-        primaryStatus: "Ready to record",
-        secondaryStatus: "Local capture",
-        details: [
-            .init(label: "Mode", value: "Mic + system"),
-            .init(label: "Auto-scroll", value: "On"),
-            .init(label: "Model", value: "ggml-base.en")
+        primaryStatus: nil,
+        secondaryStatus: nil,
+        details: [],
+        leadingActions: [
+            .init(id: "fullscreen", title: "Full screen") {}
         ],
-        actions: [
-            .init(id: "copy", title: "Copy as text") {}
+        trailingActions: [
+            .init(id: "set-api-key", title: "Set API key") {},
+            .init(id: "copy", title: "Copy text") {}
         ]
     ) {
         FloatingTransportView(recordingState: .ready) { }
@@ -222,14 +258,15 @@ private enum UtilityRailPalette {
 
 #Preview("Compact") {
     UtilityRailView(
-        primaryStatus: "Recording locally",
-        secondaryStatus: "00:09:42 elapsed",
-        details: [
-            .init(label: "Mode", value: "Mic + system"),
-            .init(label: "Auto-scroll", value: "Off")
+        primaryStatus: nil,
+        secondaryStatus: nil,
+        details: [],
+        leadingActions: [
+            .init(id: "fullscreen", title: "Exit full screen") {}
         ],
-        actions: [
-            .init(id: "copy", title: "Copy as text", isEnabled: false) {}
+        trailingActions: [
+            .init(id: "set-api-key", title: "Set API key") {},
+            .init(id: "copy", title: "Copy text", isEnabled: false) {}
         ]
     ) {
         FloatingTransportView(recordingState: .recording) { }

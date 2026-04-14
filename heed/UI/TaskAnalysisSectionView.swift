@@ -2,6 +2,8 @@ import SwiftUI
 
 struct TaskAnalysisSectionView: View {
     @ObservedObject var controller: TaskAnalysisController
+    @ObservedObject var taskContextController: TaskContextController
+    let displayedSession: TranscriptSession?
 
     var body: some View {
         if let section = controller.sectionModel {
@@ -12,15 +14,11 @@ struct TaskAnalysisSectionView: View {
                     expandedContent(for: section)
                 }
             }
-            .padding(.horizontal, 18)
             .padding(.vertical, 16)
-            .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(HeedTheme.ColorToken.panel.opacity(0.9))
-            )
-            .overlay {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(HeedTheme.ColorToken.borderSubtle, lineWidth: 1)
+            .overlay(alignment: .top) {
+                Rectangle()
+                    .fill(HeedTheme.ColorToken.borderSubtle)
+                    .frame(height: 1)
             }
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("task-analysis-section")
@@ -99,26 +97,6 @@ struct TaskAnalysisSectionView: View {
                 selectedTaskIDs: section.selectedTaskIDs,
                 noTasksReason: result.noTasksReason
             )
-
-            if !result.decisions.isEmpty {
-                noteGroup(
-                    title: "Decisions",
-                    notes: result.decisions,
-                    isExpanded: section.isDecisionsExpanded,
-                    accessibilityIdentifier: "task-analysis-decisions-toggle",
-                    toggle: controller.toggleDecisionsExpansion
-                )
-            }
-
-            if !result.followUps.isEmpty {
-                noteGroup(
-                    title: "Follow-ups",
-                    notes: result.followUps,
-                    isExpanded: section.isFollowUpsExpanded,
-                    accessibilityIdentifier: "task-analysis-follow-ups-toggle",
-                    toggle: controller.toggleFollowUpsExpansion
-                )
-            }
         }
     }
 
@@ -152,12 +130,16 @@ struct TaskAnalysisSectionView: View {
                         TaskRowView(
                             task: task,
                             isSelected: selectedTaskIDs.contains(task.id),
-                            spawnedTaskID: controller.lastSpawnedTaskID,
+                            contextActionState: contextActionState(for: task),
                             onToggleSelection: {
                                 controller.toggleTaskSelection(task.id)
                             },
-                            onSpawnAgent: {
-                                controller.requestSpawnAgent(for: task.id)
+                            onPrepareContext: {
+                                guard let displayedSession else {
+                                    return
+                                }
+
+                                taskContextController.prepareTaskContext(for: task, in: displayedSession)
                             },
                             onShowSource: {
                                 controller.showSource(for: task.evidenceSegmentIDs)
@@ -165,42 +147,6 @@ struct TaskAnalysisSectionView: View {
                         )
 
                         if index < tasks.count - 1 {
-                            Divider()
-                                .overlay(HeedTheme.ColorToken.borderSubtle)
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    private func noteGroup(
-        title: String,
-        notes: [CompiledNote],
-        isExpanded: Bool,
-        accessibilityIdentifier: String,
-        toggle: @escaping () -> Void
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            groupTitle(
-                title,
-                count: notes.count,
-                isExpanded: isExpanded,
-                accessibilityIdentifier: accessibilityIdentifier,
-                toggle: toggle
-            )
-
-            if isExpanded {
-                VStack(alignment: .leading, spacing: 0) {
-                    ForEach(Array(notes.enumerated()), id: \.element.id) { index, note in
-                        NoteRowView(
-                            note: note,
-                            onShowSource: {
-                                controller.showSource(for: note.evidenceSegmentIDs)
-                            }
-                        )
-
-                        if index < notes.count - 1 {
                             Divider()
                                 .overlay(HeedTheme.ColorToken.borderSubtle)
                         }
@@ -258,14 +204,38 @@ struct TaskAnalysisSectionView: View {
         .buttonStyle(.plain)
         .accessibilityIdentifier(accessibilityIdentifier)
     }
+
+    private func contextActionState(for task: CompiledTask) -> TaskRowView.ContextActionState {
+        guard taskContextController.selectedTaskID == task.id else {
+            return .ready
+        }
+
+        switch taskContextController.panelState {
+        case .idle:
+            return .ready
+        case .loading:
+            return .loading
+        case .loaded:
+            return .loaded
+        case .failed:
+            return .failed
+        }
+    }
 }
 
 private struct TaskRowView: View {
+    enum ContextActionState: Equatable {
+        case ready
+        case loading
+        case loaded
+        case failed
+    }
+
     let task: CompiledTask
     let isSelected: Bool
-    let spawnedTaskID: String?
+    let contextActionState: ContextActionState
     let onToggleSelection: () -> Void
-    let onSpawnAgent: () -> Void
+    let onPrepareContext: () -> Void
     let onShowSource: () -> Void
 
     var body: some View {
@@ -285,30 +255,19 @@ private struct TaskRowView: View {
                         .foregroundStyle(HeedTheme.ColorToken.textPrimary)
                         .fixedSize(horizontal: false, vertical: true)
 
-                    Text(task.type.rawValue)
+                    Text(task.type.rawValue.uppercased())
                         .font(.system(size: 10, weight: .semibold, design: .monospaced))
                         .foregroundStyle(HeedTheme.ColorToken.textSecondary)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(HeedTheme.ColorToken.panelRaised.opacity(0.75))
 
                     Spacer(minLength: 12)
 
-                    spawnAgentButton
+                    prepareContextButton
                 }
 
                 Text(task.details)
                     .font(.system(size: 14, weight: .regular, design: .default))
                     .foregroundStyle(HeedTheme.ColorToken.textPrimary.opacity(0.86))
                     .fixedSize(horizontal: false, vertical: true)
-
-                if let assigneeHint = task.assigneeHint {
-                    Text("Assignee hint: \(assigneeHint)")
-                        .font(.system(size: 11, weight: .medium, design: .monospaced))
-                        .foregroundStyle(HeedTheme.ColorToken.textSecondary)
-                }
-
-                evidenceLine(text: task.evidenceExcerpt)
 
                 Button(action: onShowSource) {
                     Text("Show source")
@@ -323,10 +282,10 @@ private struct TaskRowView: View {
         .padding(.vertical, 14)
     }
 
-    private var spawnAgentButton: some View {
-        Button(action: onSpawnAgent) {
+    private var prepareContextButton: some View {
+        Button(action: onPrepareContext) {
             HStack(spacing: 6) {
-                Text(spawnButtonTitle)
+                Text(contextButtonTitle)
                 Image(systemName: "chevron.right")
                     .font(.system(size: 9, weight: .semibold))
             }
@@ -339,61 +298,22 @@ private struct TaskRowView: View {
                 size: .compact
             )
         )
-        .accessibilityLabel(spawnButtonTitle)
-        .accessibilityIdentifier("task-row-spawn-agent-\(task.id)")
+        .disabled(contextActionState == .loading)
+        .opacity(contextActionState == .loading ? 0.82 : 1)
+        .accessibilityLabel(contextButtonTitle)
+        .accessibilityIdentifier("task-row-prepare-context-\(task.id)")
     }
 
-    private var spawnButtonTitle: String {
-        spawnedTaskID == task.id ? "Spawning..." : "Spawn agent"
-    }
-
-    private func evidenceLine(text: String) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Evidence")
-                .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                .foregroundStyle(HeedTheme.ColorToken.textSecondary)
-
-            Text("\"\(text)\"")
-                .font(.system(size: 13, weight: .regular, design: .default))
-                .foregroundStyle(HeedTheme.ColorToken.textPrimary.opacity(0.8))
-                .fixedSize(horizontal: false, vertical: true)
+    private var contextButtonTitle: String {
+        switch contextActionState {
+        case .ready:
+            return "Prepare context"
+        case .loading:
+            return "Preparing..."
+        case .loaded:
+            return "Refresh context"
+        case .failed:
+            return "Try again"
         }
-    }
-}
-
-private struct NoteRowView: View {
-    let note: CompiledNote
-    let onShowSource: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(note.title)
-                .font(.system(size: 15, weight: .semibold, design: .default))
-                .foregroundStyle(HeedTheme.ColorToken.textPrimary)
-
-            Text(note.details)
-                .font(.system(size: 14, weight: .regular, design: .default))
-                .foregroundStyle(HeedTheme.ColorToken.textPrimary.opacity(0.86))
-                .fixedSize(horizontal: false, vertical: true)
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Evidence")
-                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(HeedTheme.ColorToken.textSecondary)
-
-                Text("\"\(note.evidenceExcerpt)\"")
-                    .font(.system(size: 13, weight: .regular, design: .default))
-                    .foregroundStyle(HeedTheme.ColorToken.textPrimary.opacity(0.8))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            Button(action: onShowSource) {
-                Text("Show source")
-                    .font(.system(size: 11, weight: .medium, design: .monospaced))
-                    .foregroundStyle(HeedTheme.ColorToken.textPrimary.opacity(0.82))
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(.vertical, 14)
     }
 }

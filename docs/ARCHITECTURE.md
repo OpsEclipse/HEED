@@ -16,7 +16,7 @@ Heed is now a real macOS SwiftUI app with a first end-to-end local transcript pa
 - UI tests: [`../heedUITests/`](../heedUITests/)
 - Build settings: [`../heed.xcodeproj/project.pbxproj`](../heed.xcodeproj/project.pbxproj)
 
-The app now has a shared domain model, microphone capture, system-audio capture, speech-aware chunking, a Whisper helper process, JSON persistence, export helpers, and demo-mode UI hooks for UI testing.
+The app now has a shared domain model, microphone capture, system-audio capture, speech-aware chunking, a Whisper helper process, JSON persistence, export helpers, an OpenAI-backed task-analysis path, Keychain-backed API-key storage, and demo-mode UI hooks for UI testing.
 
 ## Folder Ownership
 
@@ -41,7 +41,7 @@ These are real project settings today.
 - Generated Info.plist: enabled
 - Default Swift actor isolation [the thread-safety rule Swift uses for code access]: `MainActor`
 - Privacy usage strings for microphone, screen capture, and system audio: present
-- Checked-in entitlements: App Sandbox and microphone input; screen recording still relies on the macOS permission flow instead of a separate entitlement
+- Checked-in entitlements: App Sandbox, microphone input, and outbound network client access; screen recording still relies on the macOS permission flow instead of a separate entitlement
 - User-selected file write access for exports: enabled
 
 Those settings live in [`../heed.xcodeproj/project.pbxproj`](../heed.xcodeproj/project.pbxproj).
@@ -62,7 +62,9 @@ The current local meeting-transcript pipeline is:
    Sends one source at a time into the bundled Whisper helper on a background actor [a Swift unit that protects data from race conditions].
 6. Session store
    Saves transcript sessions and keeps crash loss small.
-7. Export layer
+7. OpenAI task pipeline
+   Sends transcript text to OpenAI only after the user clicks `Compile tasks` or a task-level context action. Pass 1 builds grouped `Tasks` only, using the types `Feature`, `Bug fix`, and `Miscellaneous`. Pass 2 builds temporary task context for one selected task. API-key entry lives in the UI, but the secret is stored in Keychain.
+8. Export layer
    Builds clipboard, text-file, and Markdown-file transcript output. The refreshed shell currently surfaces clipboard copy, while file export still lives in the controller layer and is not wired into the current UI.
 
 ## Important Boundaries
@@ -74,6 +76,7 @@ These boundaries should stay clear as the app grows.
 - Transcription should consume source-specific chunks, not reach into the UI.
 - Persistence should own saved session format.
 - Permission checks should live in one place so the app has one answer for “can we record?”
+- The OpenAI task layer should stay on-demand and must not upload transcript text unless the user clicked a task action.
 
 ## Invariants
 
@@ -84,6 +87,7 @@ These invariants [rules that should always stay true] are either already true or
 - Transcript sessions should survive normal app restarts.
 - Export should not mutate the saved source session.
 - If the product claims local transcription, raw meeting audio should not silently leave the machine.
+- Temporary task context should stay in memory until the team explicitly chooses a saved format.
 
 ## Cross-Cutting Concerns
 

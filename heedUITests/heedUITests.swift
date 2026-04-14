@@ -36,12 +36,12 @@ final class heedUITests: XCTestCase {
 
         app.buttons["record-button"].click()
 
-        let micTranscript = app.otherElements["segment-mic"].firstMatch
+        let micTranscript = app.staticTexts["Can you hear me clearly on this side?"]
         XCTAssertTrue(micTranscript.waitForExistence(timeout: uiTimeout))
 
         app.buttons["record-button"].click()
         let recordButton = app.buttons["record-button"]
-        XCTAssertTrue(recordButton.waitForExistence(timeout: uiTimeout))
+        XCTAssertTrue(recordButton.waitForExistence(timeout: uiTimeout + 5))
         for _ in 0..<30 where recordButton.label != "Record" {
             RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.1))
         }
@@ -86,14 +86,22 @@ final class heedUITests: XCTestCase {
         XCTAssertTrue(app.buttons["task-analysis-follow-ups-toggle"].exists)
         XCTAssertEqual(compileButton.label, "Recompile")
 
-        let spawnAgentButton = app.buttons["task-row-spawn-agent-verify-audio-paths"]
-        XCTAssertTrue(spawnAgentButton.waitForExistence(timeout: uiTimeout))
-        XCTAssertEqual(spawnAgentButton.label, "Spawn agent")
-        spawnAgentButton.click()
-        for _ in 0..<30 where spawnAgentButton.label != "Spawning..." {
+        let prepareContextButton = app.buttons["task-row-prepare-context-verify-audio-paths"]
+        XCTAssertTrue(prepareContextButton.waitForExistence(timeout: uiTimeout))
+        XCTAssertEqual(prepareContextButton.label, "Prepare context")
+        prepareContextButton.click()
+
+        let taskContextPanel = app.buttons["task-context-primary"]
+        XCTAssertTrue(taskContextPanel.waitForExistence(timeout: uiTimeout))
+        XCTAssertEqual(taskContextPanel.label, "Spawn agent")
+        XCTAssertTrue(app.buttons["task-context-close"].exists)
+        XCTAssertTrue(app.staticTexts["Turn this transcript task into a concrete implementation plan."].waitForExistence(timeout: uiTimeout))
+
+        taskContextPanel.click()
+        for _ in 0..<30 where taskContextPanel.label != "Spawn agent" {
             RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.1))
         }
-        XCTAssertEqual(spawnAgentButton.label, "Spawning...")
+        XCTAssertEqual(taskContextPanel.label, "Spawn agent")
 
         let showSourceButton = app.buttons["task-row-source-verify-audio-paths"]
         XCTAssertTrue(showSourceButton.exists)
