@@ -15,8 +15,12 @@ struct WorkspaceShell: View {
         controller.activeSession ?? controller.selectedSession
     }
 
-    private var displayedSegments: [TranscriptSegment] {
-        displayedSession?.segments ?? []
+    private var displayedMicSegments: [TranscriptSegment] {
+        displayedSession?.micSegments ?? []
+    }
+
+    private var displayedSystemSegments: [TranscriptSegment] {
+        displayedSession?.systemSegments ?? []
     }
 
     var body: some View {
@@ -44,7 +48,9 @@ struct WorkspaceShell: View {
                                 TranscriptCanvasView(
                                     state: controller.state,
                                     session: displayedSession,
-                                    segments: displayedSegments,
+                                    micSegments: displayedMicSegments,
+                                    systemSegments: displayedSystemSegments,
+                                    sourceProcessingStates: controller.sourceProcessingStates,
                                     sourceJumpRequest: taskAnalysisController.sourceJumpRequest,
                                     highlightedSegmentID: taskAnalysisController.highlightedSegmentID,
                                     appendixFocusNonce: taskAnalysisController.sectionFocusNonce,
@@ -55,7 +61,7 @@ struct WorkspaceShell: View {
                                         taskContextController: taskContextController,
                                         displayedSession: displayedSession
                                     )
-                                    .padding(.top, displayedSegments.isEmpty ? 6 : 16)
+                                    .padding(.top, displayedSession?.segments.isEmpty == false ? 16 : 6)
                                 }
 
                                 SidebarToggleButton(isSidebarVisible: $isSidebarVisible)
@@ -123,15 +129,30 @@ struct WorkspaceShell: View {
     }
 
     var utilityPrimaryStatus: String? {
-        nil
+        controller.state.statusText
     }
 
     var utilitySecondaryStatus: String? {
-        nil
+        switch controller.state {
+        case .recording, .stopping, .processing:
+            return controller.elapsedTime.heedClockString
+        case .idle, .requestingPermissions, .ready, .error:
+            return nil
+        }
     }
 
     var utilityDetails: [UtilityRailView.Detail] {
-        []
+        if controller.state == .processing {
+            return AudioSource.allCases.map { source in
+                UtilityRailView.Detail(
+                    id: source.rawValue,
+                    label: source.label,
+                    value: controller.sourceProcessingStates[source]?.rawValue ?? SourceProcessingState.queued.rawValue
+                )
+            }
+        }
+
+        return []
     }
 
     var leadingUtilityActions: [UtilityRailView.Action] {

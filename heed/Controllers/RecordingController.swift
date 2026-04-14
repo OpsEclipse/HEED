@@ -10,6 +10,7 @@ final class RecordingController: ObservableObject {
     @Published private(set) var sessions: [TranscriptSession] = []
     @Published private(set) var activeSession: TranscriptSession?
     @Published private(set) var liveSegments: [TranscriptSegment] = []
+    @Published private(set) var sourceProcessingStates: [AudioSource: SourceProcessingState] = [:]
     @Published private(set) var selectedSessionID: UUID?
     @Published private(set) var errorMessage: String?
     @Published private(set) var elapsedTime: TimeInterval = 0
@@ -36,11 +37,11 @@ final class RecordingController: ObservableObject {
             return true
         }
 
-        return state != .recording && state != .requestingPermissions && state != .stopping
+        return state != .recording && state != .requestingPermissions && state != .stopping && state != .processing
     }
 
     var canRecord: Bool {
-        state != .requestingPermissions && state != .stopping
+        state != .requestingPermissions && state != .stopping && state != .processing
     }
 
     var isDemoModeEnabled: Bool {
@@ -57,13 +58,12 @@ final class RecordingController: ObservableObject {
     private let modelName = "ggml-base.en"
     private let appVersion: String
 
-    private var timelineStore = TranscriptTimelineStore()
     private var micCaptureManager: MicCaptureManager?
     private var systemAudioCaptureManager: SystemAudioCaptureManager?
-    private var micPipeline: SourcePipeline?
-    private var systemPipeline: SourcePipeline?
+    private var micWriter: SourceRecordingFileWriter?
+    private var systemWriter: SourceRecordingFileWriter?
+    private var sourceFileURLs: [AudioSource: URL] = [:]
     private var timerTask: Task<Void, Never>?
-    private var demoTask: Task<Void, Never>?
     private var startupWatchdogTask: Task<Void, Never>?
     private var activeSources = Set<AudioSource>()
     private var hasReceivedAudioFrames = false
@@ -195,12 +195,13 @@ final class RecordingController: ObservableObject {
 
         activeSession = session
         liveSegments = []
-        timelineStore.reset()
+        sourceProcessingStates = [:]
         selectedSessionID = session.id
         elapsedTime = 0
         activeSources = []
         hasReceivedAudioFrames = false
         hasDetectedSpeechLikeAudio = false
+        sourceFileURLs = makeSourceFileURLs(for: session.id)
 
         do {
             try await sessionStore.save(session: session)
@@ -211,47 +212,30 @@ final class RecordingController: ObservableObject {
             return
         }
 
+        if let micURL = sourceFileURLs[.mic] {
+            micWriter = SourceRecordingFileWriter(fileURL: micURL)
+        }
+        if let systemURL = sourceFileURLs[.system] {
+            systemWriter = SourceRecordingFileWriter(fileURL: systemURL)
+        }
+
         if demoMode {
             state = .recording
-            startDemoRecording()
             startTimer(from: startedAt)
             startStartupWatchdog()
             return
         }
 
-        let helperURL = Bundle.main.bundleURL
-            .appending(path: "Contents", directoryHint: .isDirectory)
-            .appending(path: "Helpers", directoryHint: .isDirectory)
-            .appending(path: "WhisperChunkCLI")
-        let modelURL = Bundle.main.resourceURL!
-            .appending(path: "Models", directoryHint: .isDirectory)
-            .appending(path: "ggml-base.en.bin")
-
-        let micPipeline = SourcePipeline(
-            source: .mic,
-            helperURL: helperURL,
-            modelURL: modelURL
-        ) { [weak self] segments in
-            await self?.consume(segments: segments)
-        }
-        let systemPipeline = SourcePipeline(
-            source: .system,
-            helperURL: helperURL,
-            modelURL: modelURL
-        ) { [weak self] segments in
-            await self?.consume(segments: segments)
-        }
-
         var startupMessages: [String] = []
 
         do {
-            try await startMicSource(with: micPipeline)
+            try await startMicSource()
         } catch {
             startupMessages.append("Microphone capture could not start: \(error.localizedDescription)")
         }
 
         do {
-            try await startSystemSource(with: systemPipeline)
+            try await startSystemSource()
         } catch {
             startupMessages.append("System audio capture could not start: \(error.localizedDescription)")
         }
@@ -279,56 +263,42 @@ final class RecordingController: ObservableObject {
         state = .stopping
         startupWatchdogTask?.cancel()
         timerTask?.cancel()
-        demoTask?.cancel()
         let stopRequestedAt = Date()
         elapsedTime = stopRequestedAt.timeIntervalSince(activeSession.startedAt)
         micCaptureManager?.stop()
         await systemAudioCaptureManager?.stop()
+        micCaptureManager = nil
+        systemAudioCaptureManager = nil
 
         do {
-            try await micPipeline?.finish(responseTimeout: .seconds(8))
-            try await systemPipeline?.finish(responseTimeout: .seconds(8))
+            try micWriter?.finish()
+            try systemWriter?.finish()
         } catch {
             await failRecording(with: error.localizedDescription)
             return
         }
 
-        let finishedSession = finalizedSession(from: activeSession, status: .completed, endedAt: stopRequestedAt)
-
-        self.activeSession = finishedSession
-        upsertStoredSession(finishedSession)
+        let processingSession = finalizedSession(from: activeSession, status: .completed, endedAt: stopRequestedAt)
+        self.activeSession = processingSession
+        self.liveSegments = []
+        self.state = .processing
 
         do {
+            let finishedSession = try await buildCompletedSession(from: processingSession)
+            self.activeSession = finishedSession
+            upsertStoredSession(finishedSession)
             try await sessionStore.save(session: finishedSession)
+            cleanupTransientSourceFiles()
             self.activeSession = nil
-            self.liveSegments = []
             self.activeSources = []
-            self.micPipeline = nil
-            self.systemPipeline = nil
-            self.micCaptureManager = nil
-            self.systemAudioCaptureManager = nil
+            self.micWriter = nil
+            self.systemWriter = nil
+            self.sourceFileURLs = [:]
+            self.sourceProcessingStates = [:]
             self.state = .ready
             self.selectedSessionID = finishedSession.id
         } catch {
             await failRecording(with: error.localizedDescription)
-        }
-    }
-
-    private func startDemoRecording() {
-        demoTask = Task { [weak self] in
-            guard let self else { return }
-
-            let segments = [
-                TranscriptSegment(source: .mic, startedAt: 1, endedAt: 2.4, text: "Can you hear me clearly on this side?"),
-                TranscriptSegment(source: .system, startedAt: 2, endedAt: 3.5, text: "Yes, the remote call audio is coming through."),
-                TranscriptSegment(source: .mic, startedAt: 4.2, endedAt: 5.8, text: "Perfect. Heed is showing separate live labels."),
-            ]
-
-            for segment in segments {
-                try? await Task.sleep(for: .seconds(1))
-                guard !Task.isCancelled else { return }
-                await consume(segments: [segment])
-            }
         }
     }
 
@@ -343,25 +313,6 @@ final class RecordingController: ObservableObject {
         }
     }
 
-    private func consume(segments: [TranscriptSegment]) async {
-        guard !segments.isEmpty, var activeSession else {
-            return
-        }
-
-        startupWatchdogTask?.cancel()
-        timelineStore.append(segments)
-        activeSession.segments = timelineStore.orderedSegments
-        activeSession.duration = elapsedTime
-        self.activeSession = activeSession
-        self.liveSegments = activeSession.segments
-        upsertStoredSession(activeSession)
-
-        do {
-            try await sessionStore.save(session: activeSession)
-        } catch {
-            await failRecording(with: error.localizedDescription)
-        }
-    }
 
     private func failRecording(with message: String) async {
         startupWatchdogTask?.cancel()
@@ -370,20 +321,20 @@ final class RecordingController: ObservableObject {
         }
 
         timerTask?.cancel()
-        demoTask?.cancel()
         micCaptureManager?.stop()
         await systemAudioCaptureManager?.stop()
-        await micPipeline?.stop()
-        await systemPipeline?.stop()
         micCaptureManager = nil
         systemAudioCaptureManager = nil
-        micPipeline = nil
-        systemPipeline = nil
+        try? micWriter?.finish()
+        try? systemWriter?.finish()
+        micWriter = nil
+        systemWriter = nil
         activeSources = []
         activeSession = nil
         liveSegments = []
+        sourceProcessingStates = [:]
 
-        if let interruptedSession, !interruptedSession.segments.isEmpty {
+        if let interruptedSession, !interruptedSession.segments.isEmpty || hasRecoverableSourceFiles(for: interruptedSession.id) {
             upsertStoredSession(interruptedSession)
             selectedSessionID = interruptedSession.id
             do {
@@ -406,68 +357,73 @@ final class RecordingController: ObservableObject {
             elapsedTime = 0
         }
 
+        sourceFileURLs = [:]
         errorMessage = message
         state = .error(message)
     }
 
-    private func startMicSource(with pipeline: SourcePipeline) async throws {
-        try await pipeline.start()
+    private func startMicSource() async throws {
+        guard let writer = micWriter else {
+            throw NSError(domain: "Heed.RecordingController", code: 3, userInfo: [
+                NSLocalizedDescriptionKey: "The microphone file writer was not prepared."
+            ])
+        }
 
-        do {
-            let micCaptureManager = MicCaptureManager()
-            try micCaptureManager.start { [weak self] frames in
-                guard let self else { return }
-                Task {
-                    await self.noteIncomingFrames(frames, from: .mic)
-                    do {
-                        try await pipeline.ingest(frames: frames)
-                    } catch {
-                        await self.handleSourceFailure(.mic, message: error.localizedDescription)
-                    }
+        let micCaptureManager = MicCaptureManager()
+        try micCaptureManager.start { [weak self] frames in
+            do {
+                try writer.write(frames: frames)
+            } catch {
+                Task { [weak self] in
+                    await self?.handleSourceFailure(.mic, message: error.localizedDescription)
                 }
+                return
             }
 
-            self.micPipeline = pipeline
-            self.micCaptureManager = micCaptureManager
-            self.activeSources.insert(.mic)
-        } catch {
-            await pipeline.stop()
-            throw error
+            guard let self else { return }
+            Task { @MainActor in
+                self.noteIncomingFrames(frames, from: .mic)
+            }
         }
+
+        self.micCaptureManager = micCaptureManager
+        self.activeSources.insert(.mic)
     }
 
-    private func startSystemSource(with pipeline: SourcePipeline) async throws {
-        try await pipeline.start()
-
-        do {
-            let systemAudioCaptureManager = SystemAudioCaptureManager()
-            try await systemAudioCaptureManager.start(
-                onFrames: { [weak self] frames in
-                    guard let self else { return }
-                    Task {
-                        await self.noteIncomingFrames(frames, from: .system)
-                        do {
-                            try await pipeline.ingest(frames: frames)
-                        } catch {
-                            await self.handleSourceFailure(.system, message: error.localizedDescription)
-                        }
-                    }
-                },
-                onFailure: { [weak self] message in
-                    guard let self else { return }
-                    Task {
-                        await self.handleSourceFailure(.system, message: message)
-                    }
-                }
-            )
-
-            self.systemPipeline = pipeline
-            self.systemAudioCaptureManager = systemAudioCaptureManager
-            self.activeSources.insert(.system)
-        } catch {
-            await pipeline.stop()
-            throw error
+    private func startSystemSource() async throws {
+        guard let writer = systemWriter else {
+            throw NSError(domain: "Heed.RecordingController", code: 4, userInfo: [
+                NSLocalizedDescriptionKey: "The system audio file writer was not prepared."
+            ])
         }
+
+        let systemAudioCaptureManager = SystemAudioCaptureManager()
+        try await systemAudioCaptureManager.start(
+            onFrames: { [weak self] frames in
+                do {
+                    try writer.write(frames: frames)
+                } catch {
+                    Task { [weak self] in
+                        await self?.handleSourceFailure(.system, message: error.localizedDescription)
+                    }
+                    return
+                }
+
+                guard let self else { return }
+                Task { @MainActor in
+                    self.noteIncomingFrames(frames, from: .system)
+                }
+            },
+            onFailure: { [weak self] message in
+                guard let self else { return }
+                Task {
+                    await self.handleSourceFailure(.system, message: message)
+                }
+            }
+        )
+
+        self.systemAudioCaptureManager = systemAudioCaptureManager
+        self.activeSources.insert(.system)
     }
 
     private func noteIncomingFrames(_ frames: [Float], from source: AudioSource) {
@@ -506,13 +462,13 @@ final class RecordingController: ObservableObject {
         case .mic:
             micCaptureManager?.stop()
             micCaptureManager = nil
-            await micPipeline?.stop()
-            micPipeline = nil
+            try? micWriter?.finish()
+            micWriter = nil
         case .system:
             await systemAudioCaptureManager?.stop()
             systemAudioCaptureManager = nil
-            await systemPipeline?.stop()
-            systemPipeline = nil
+            try? systemWriter?.finish()
+            systemWriter = nil
         }
     }
 
@@ -526,7 +482,7 @@ final class RecordingController: ObservableObject {
     }
 
     private func evaluateStartupHealth() async {
-        guard state == .recording, activeSession?.segments.isEmpty != false else {
+        guard state == .recording, activeSession != nil else {
             return
         }
 
@@ -534,12 +490,143 @@ final class RecordingController: ObservableObject {
             await failRecording(with: "Heed started the session but never received audio. Check your microphone, screen capture permission, and current audio devices, then try again.")
             return
         }
+    }
 
-        guard hasDetectedSpeechLikeAudio else {
-            return
+    private func buildCompletedSession(from session: TranscriptSession) async throws -> TranscriptSession {
+        if demoMode {
+            return try await buildDemoCompletedSession(from: session)
         }
 
-        await failRecording(with: "Heed heard audio but did not produce text. Try recording again. If this keeps happening, restart the app so the local model can reload cleanly.")
+        var completedSession = session
+        let availableSources = availableRecordedSources()
+
+        sourceProcessingStates = Dictionary(uniqueKeysWithValues: availableSources.map { ($0, .queued) })
+
+        var failureMessages: [String] = []
+
+        for source in availableSources {
+            sourceProcessingStates[source] = .processing
+
+            do {
+                let segments = try await transcribeSource(source)
+                apply(segments: segments, to: &completedSession, source: source)
+                sourceProcessingStates[source] = .done
+            } catch {
+                sourceProcessingStates[source] = .failed
+                failureMessages.append("\(source.label) transcription failed: \(error.localizedDescription)")
+            }
+        }
+
+        if completedSession.segments.isEmpty, !failureMessages.isEmpty {
+            throw NSError(domain: "Heed.RecordingController", code: 2, userInfo: [
+                NSLocalizedDescriptionKey: failureMessages.joined(separator: " ")
+            ])
+        }
+
+        if !failureMessages.isEmpty {
+            errorMessage = failureMessages.joined(separator: " ")
+        }
+
+        return completedSession
+    }
+
+    private func buildDemoCompletedSession(from session: TranscriptSession) async throws -> TranscriptSession {
+        var completedSession = session
+        sourceProcessingStates = [.mic: .queued, .system: .queued]
+
+        for source in [AudioSource.mic, .system] {
+            sourceProcessingStates[source] = .processing
+            try await Task.sleep(for: .milliseconds(250))
+            apply(segments: demoSegments(for: source), to: &completedSession, source: source)
+            sourceProcessingStates[source] = .done
+        }
+
+        return completedSession
+    }
+
+    private func transcribeSource(_ source: AudioSource) async throws -> [TranscriptSegment] {
+        guard let fileURL = sourceFileURLs[source] else {
+            return []
+        }
+
+        let helperURL = Bundle.main.bundleURL
+            .appending(path: "Contents", directoryHint: .isDirectory)
+            .appending(path: "Helpers", directoryHint: .isDirectory)
+            .appending(path: "WhisperChunkCLI")
+        let modelURL = Bundle.main.resourceURL!
+            .appending(path: "Models", directoryHint: .isDirectory)
+            .appending(path: "ggml-base.en.bin")
+
+        let worker = WhisperWorker(source: source, helperURL: helperURL, modelURL: modelURL)
+        let transcriber = BatchSourceTranscriber(source: source, worker: worker)
+        return try await transcriber.transcribe(from: fileURL)
+    }
+
+    private func apply(
+        segments: [TranscriptSegment],
+        to session: inout TranscriptSession,
+        source: AudioSource
+    ) {
+        switch source {
+        case .mic:
+            session.micSegments = segments
+        case .system:
+            session.systemSegments = segments
+        }
+    }
+
+    private func availableRecordedSources() -> [AudioSource] {
+        AudioSource.allCases.filter { source in
+            guard let fileURL = sourceFileURLs[source] else {
+                return false
+            }
+
+            return hasNonEmptyFile(at: fileURL)
+        }
+    }
+
+    private func hasRecoverableSourceFiles(for sessionID: UUID) -> Bool {
+        let sessionDirectory = sessionStore.sessionDirectoryURL(for: sessionID)
+        return AudioSource.allCases.contains { source in
+            hasNonEmptyFile(at: sessionDirectory.appending(path: "\(source.rawValue).pcm"))
+        }
+    }
+
+    private func hasNonEmptyFile(at fileURL: URL) -> Bool {
+        guard let attributes = try? FileManager.default.attributesOfItem(atPath: fileURL.path),
+              let fileSize = attributes[.size] as? NSNumber else {
+            return false
+        }
+
+        return fileSize.intValue > 0
+    }
+
+    private func makeSourceFileURLs(for sessionID: UUID) -> [AudioSource: URL] {
+        let sessionDirectory = sessionStore.sessionDirectoryURL(for: sessionID)
+        return [
+            .mic: sessionDirectory.appending(path: "mic.pcm"),
+            .system: sessionDirectory.appending(path: "system.pcm")
+        ]
+    }
+
+    private func cleanupTransientSourceFiles() {
+        for fileURL in sourceFileURLs.values {
+            try? FileManager.default.removeItem(at: fileURL)
+        }
+    }
+
+    private func demoSegments(for source: AudioSource) -> [TranscriptSegment] {
+        switch source {
+        case .mic:
+            return [
+                TranscriptSegment(source: .mic, startedAt: 1, endedAt: 2.4, text: "Can you hear me clearly on this side?"),
+                TranscriptSegment(source: .mic, startedAt: 4.2, endedAt: 5.8, text: "Perfect. Heed is saving the mic side for batch transcription.")
+            ]
+        case .system:
+            return [
+                TranscriptSegment(source: .system, startedAt: 2, endedAt: 3.5, text: "Yes, the remote call audio is coming through.")
+            ]
+        }
     }
 
     private func finalizedSession(
@@ -557,57 +644,5 @@ final class RecordingController: ObservableObject {
     private func upsertStoredSession(_ session: TranscriptSession) {
         sessions.removeAll(where: { $0.id == session.id })
         sessions.insert(session, at: 0)
-    }
-}
-
-private actor SourcePipeline {
-    private let worker: WhisperWorker
-    private let sink: @Sendable ([TranscriptSegment]) async -> Void
-    private var chunker: AudioChunker
-
-    init(
-        source: AudioSource,
-        helperURL: URL,
-        modelURL: URL,
-        sink: @escaping @Sendable ([TranscriptSegment]) async -> Void
-    ) {
-        self.worker = WhisperWorker(source: source, helperURL: helperURL, modelURL: modelURL)
-        self.chunker = AudioChunker(source: source)
-        self.sink = sink
-    }
-
-    func start() async throws {
-        try await worker.start()
-    }
-
-    func ingest(frames: [Float]) async throws {
-        let chunks = chunker.append(frames)
-        try await process(chunks)
-    }
-
-    func finish(responseTimeout: Duration = .seconds(20)) async throws {
-        let chunks = chunker.flush()
-        try await process(chunks, responseTimeout: responseTimeout)
-        await worker.stop()
-    }
-
-    func stop() async {
-        await worker.stop()
-    }
-
-    private func process(
-        _ chunks: [AudioChunk],
-        responseTimeout: Duration = .seconds(20)
-    ) async throws {
-        for chunk in chunks {
-            let segments = try await worker.transcribe(
-                chunk: chunk,
-                responseTimeout: responseTimeout
-            )
-            guard !segments.isEmpty else {
-                continue
-            }
-            await sink(segments)
-        }
     }
 }

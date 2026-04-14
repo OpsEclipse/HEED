@@ -3,7 +3,9 @@ import SwiftUI
 struct TranscriptCanvasView<Appendix: View>: View {
     let state: RecordingState
     let session: TranscriptSession?
-    let segments: [TranscriptSegment]
+    let micSegments: [TranscriptSegment]
+    let systemSegments: [TranscriptSegment]
+    let sourceProcessingStates: [AudioSource: SourceProcessingState]
     let sourceJumpRequest: TaskAnalysisController.SourceJumpRequest?
     let highlightedSegmentID: UUID?
     let appendixFocusNonce: Int
@@ -13,7 +15,9 @@ struct TranscriptCanvasView<Appendix: View>: View {
     init(
         state: RecordingState,
         session: TranscriptSession?,
-        segments: [TranscriptSegment],
+        micSegments: [TranscriptSegment],
+        systemSegments: [TranscriptSegment],
+        sourceProcessingStates: [AudioSource: SourceProcessingState] = [:],
         sourceJumpRequest: TaskAnalysisController.SourceJumpRequest? = nil,
         highlightedSegmentID: UUID? = nil,
         appendixFocusNonce: Int = 0,
@@ -22,7 +26,9 @@ struct TranscriptCanvasView<Appendix: View>: View {
     ) {
         self.state = state
         self.session = session
-        self.segments = segments
+        self.micSegments = micSegments
+        self.systemSegments = systemSegments
+        self.sourceProcessingStates = sourceProcessingStates
         self.sourceJumpRequest = sourceJumpRequest
         self.highlightedSegmentID = highlightedSegmentID
         self.appendixFocusNonce = appendixFocusNonce
@@ -35,88 +41,100 @@ struct TranscriptCanvasView<Appendix: View>: View {
     }
 
     var body: some View {
-        TranscriptScroller(
-            segments: segments,
-            emptyTitle: emptyTitle,
-            sourceJumpRequest: sourceJumpRequest,
-            highlightedSegmentID: highlightedSegmentID,
-            appendixFocusNonce: appendixFocusNonce,
-            appendix: appendix,
-            autoScrollEnabled: $autoScrollEnabled
-        )
-        .frame(maxWidth: 760, maxHeight: .infinity, alignment: .top)
-        .padding(.top, 56)
-        .padding(.horizontal, 28)
-        .padding(.bottom, 104)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        canvasContent
+            .frame(maxWidth: 980, maxHeight: .infinity, alignment: .top)
+            .padding(.top, 56)
+            .padding(.horizontal, 28)
+            .padding(.bottom, 104)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
+
+    @ViewBuilder
+    private var canvasContent: some View {
+        switch state {
+        case .recording, .stopping:
+            Color.clear
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .accessibilityIdentifier("recording-blank-canvas")
+        case .processing:
+            ProcessingStateView(sourceProcessingStates: sourceProcessingStates)
+        case .idle, .requestingPermissions, .ready, .error:
+            if micSegments.isEmpty && systemSegments.isEmpty {
+                Text(emptyTitle)
+                    .font(.system(size: 18, weight: .regular))
+                    .foregroundStyle(HeedTheme.ColorToken.textPrimary.opacity(0.6))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .padding(.top, 24)
+                    .accessibilityIdentifier("empty-state")
+            } else {
+                SplitTranscriptReviewScroller(
+                    micSegments: micSegments,
+                    systemSegments: systemSegments,
+                    sourceJumpRequest: sourceJumpRequest,
+                    highlightedSegmentID: highlightedSegmentID,
+                    appendixFocusNonce: appendixFocusNonce,
+                    autoScrollEnabled: $autoScrollEnabled
+                ) {
+                    appendix
+                }
+            }
+        }
     }
 }
 
-private struct TranscriptScroller<Appendix: View>: View {
-    let segments: [TranscriptSegment]
-    let emptyTitle: String
+private struct SplitTranscriptReviewScroller<Appendix: View>: View {
+    let micSegments: [TranscriptSegment]
+    let systemSegments: [TranscriptSegment]
     let sourceJumpRequest: TaskAnalysisController.SourceJumpRequest?
     let highlightedSegmentID: UUID?
     let appendixFocusNonce: Int
-    let appendix: Appendix
     @Binding var autoScrollEnabled: Bool
+    let appendix: Appendix
+
+    init(
+        micSegments: [TranscriptSegment],
+        systemSegments: [TranscriptSegment],
+        sourceJumpRequest: TaskAnalysisController.SourceJumpRequest?,
+        highlightedSegmentID: UUID?,
+        appendixFocusNonce: Int,
+        autoScrollEnabled: Binding<Bool>,
+        @ViewBuilder appendix: () -> Appendix
+    ) {
+        self.micSegments = micSegments
+        self.systemSegments = systemSegments
+        self.sourceJumpRequest = sourceJumpRequest
+        self.highlightedSegmentID = highlightedSegmentID
+        self.appendixFocusNonce = appendixFocusNonce
+        _autoScrollEnabled = autoScrollEnabled
+        self.appendix = appendix()
+    }
 
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 20) {
-                    if segments.isEmpty {
-                        Text(emptyTitle)
-                            .font(.system(size: 18, weight: .regular))
-                            .foregroundStyle(HeedTheme.ColorToken.textPrimary.opacity(0.6))
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.top, 24)
-                            .accessibilityIdentifier("empty-state")
-                    } else {
-                        ForEach(segments) { segment in
-                            TranscriptSegmentView(
-                                segment: segment,
-                                isHighlighted: highlightedSegmentID == segment.id
-                            )
-                            .id(segment.id)
-                        }
-                    }
-
+                SourceTranscriptPanelsView(
+                    micSegments: micSegments,
+                    systemSegments: systemSegments,
+                    sourceJumpRequest: sourceJumpRequest,
+                    highlightedSegmentID: highlightedSegmentID
+                ) {
                     appendix
                         .id("task-analysis-section-anchor")
-
-                    Color.clear
-                        .frame(height: 1)
-                        .id("timeline-bottom")
-                        .onAppear {
-                            autoScrollEnabled = true
-                        }
-                        .onDisappear {
-                            autoScrollEnabled = false
-                        }
                 }
                 .padding(.bottom, 24)
+
+                Color.clear
+                    .frame(height: 1)
+                    .id("split-review-bottom")
+                    .onAppear {
+                        autoScrollEnabled = true
+                    }
+                    .onDisappear {
+                        autoScrollEnabled = false
+                    }
             }
             .heedHiddenScrollBars()
             .scrollIndicators(.hidden)
-            .onChange(of: segments.count) {
-                guard autoScrollEnabled else {
-                    return
-                }
-
-                withAnimation(.easeOut(duration: 0.12)) {
-                    proxy.scrollTo("timeline-bottom", anchor: .bottom)
-                }
-            }
-            .onChange(of: sourceJumpRequest?.nonce) {
-                guard let sourceJumpRequest else {
-                    return
-                }
-
-                withAnimation(.easeOut(duration: 0.18)) {
-                    proxy.scrollTo(sourceJumpRequest.segmentID, anchor: .center)
-                }
-            }
             .onChange(of: appendixFocusNonce) {
                 guard appendixFocusNonce > 0 else {
                     return
@@ -130,46 +148,71 @@ private struct TranscriptScroller<Appendix: View>: View {
     }
 }
 
-private struct TranscriptSegmentView: View {
-    let segment: TranscriptSegment
-    let isHighlighted: Bool
+private struct ProcessingStateView: View {
+    let sourceProcessingStates: [AudioSource: SourceProcessingState]
 
-    private var sourceColor: Color {
-        switch segment.source {
-        case .mic:
-            return Color(red: 157 / 255, green: 176 / 255, blue: 163 / 255)
-        case .system:
-            return Color(red: 186 / 255, green: 164 / 255, blue: 130 / 255)
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Finishing transcript")
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundStyle(HeedTheme.ColorToken.textPrimary)
+
+            Text("Recording is complete. Heed is transcribing each source now.")
+                .font(.system(size: 15))
+                .foregroundStyle(HeedTheme.ColorToken.textSecondary)
+
+            VStack(alignment: .leading, spacing: 10) {
+                ForEach(AudioSource.allCases, id: \.self) { source in
+                    HStack(spacing: 10) {
+                        Text(source.label)
+                            .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                            .foregroundStyle(HeedTheme.ColorToken.textSecondary)
+                            .frame(width: 60, alignment: .leading)
+
+                        Text(statusText(for: source))
+                            .font(.system(size: 14))
+                            .foregroundStyle(statusColor(for: source))
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 22)
+        .padding(.vertical, 22)
+        .frame(maxWidth: 560, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(HeedTheme.ColorToken.panel.opacity(0.96))
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(HeedTheme.ColorToken.borderSubtle, lineWidth: 1)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private func statusText(for source: AudioSource) -> String {
+        switch sourceProcessingStates[source] ?? .queued {
+        case .queued:
+            return "queued"
+        case .processing:
+            return "processing"
+        case .done:
+            return "done"
+        case .failed:
+            return "failed"
         }
     }
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("\(segment.source.label) · \(segment.startedAt.heedClockString)")
-                .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                .foregroundStyle(sourceColor)
-
-            Text(segment.text)
-                .font(.system(size: 19, weight: .regular))
-                .lineSpacing(7)
-                .foregroundStyle(HeedTheme.ColorToken.textPrimary)
-                .textSelection(.enabled)
+    private func statusColor(for source: AudioSource) -> Color {
+        switch sourceProcessingStates[source] ?? .queued {
+        case .queued:
+            return HeedTheme.ColorToken.textSecondary
+        case .processing:
+            return HeedTheme.ColorToken.actionYellow
+        case .done:
+            return HeedTheme.ColorToken.success
+        case .failed:
+            return HeedTheme.ColorToken.warning
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(HeedTheme.ColorToken.actionYellow.opacity(isHighlighted ? 0.12 : 0))
-        )
-        .overlay {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(
-                    isHighlighted ? HeedTheme.ColorToken.actionYellow.opacity(0.45) : Color.clear,
-                    lineWidth: 1
-                )
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .animation(.easeOut(duration: 0.18), value: isHighlighted)
-        .accessibilityIdentifier("segment-\(segment.source.rawValue)")
     }
 }

@@ -16,7 +16,7 @@ Heed is now a real macOS SwiftUI app with a first end-to-end local transcript pa
 - UI tests: [`../heedUITests/`](../heedUITests/)
 - Build settings: [`../heed.xcodeproj/project.pbxproj`](../heed.xcodeproj/project.pbxproj)
 
-The app now has a shared domain model, microphone capture, system-audio capture, speech-aware chunking, a Whisper helper process, JSON persistence, export helpers, an OpenAI-backed task-analysis path, Keychain-backed API-key storage, and demo-mode UI hooks for UI testing.
+The app now has a shared domain model, microphone capture, system-audio capture, file-backed source recording, post-stop batch transcription, a Whisper helper process, JSON persistence, export helpers, an OpenAI-backed task-analysis path, Keychain-backed API-key storage, and demo-mode UI hooks for UI testing.
 
 ## Folder Ownership
 
@@ -56,16 +56,16 @@ The current local meeting-transcript pipeline is:
    Pulls microphone audio from `AVAudioEngine`.
 3. `SystemAudioCaptureManager`
    Pulls system audio from `ScreenCaptureKit`, converts the stream’s native audio format into the app’s `16 kHz` mono pipeline, and reports unexpected stream failures back to the controller.
-4. Per-source utterance chunker
-   Buffers audio until speech ends, then emits one speech-bounded chunk for transcription with a short silence hold so brief pauses do not split one thought in half.
-5. `WhisperWorker`
-   Sends one source at a time into the bundled Whisper helper on a background actor [a Swift unit that protects data from race conditions].
+4. `SourceRecordingFileWriter`
+   Writes each source into its own temporary local file during recording.
+5. `BatchSourceTranscriber`
+   Reads the saved source files after stop and turns them into source-specific transcript segments on a background actor [a Swift unit that protects data from race conditions].
 6. Session store
    Saves transcript sessions and keeps crash loss small.
 7. OpenAI task pipeline
    Sends transcript text to OpenAI only after the user clicks `Compile tasks` or a task-level context action. Pass 1 builds grouped `Tasks` only, using the types `Feature`, `Bug fix`, and `Miscellaneous`. Pass 2 builds temporary task context for one selected task. API-key entry lives in the UI, but the secret is stored in Keychain.
 8. Export layer
-   Builds clipboard, text-file, and Markdown-file transcript output. The refreshed shell currently surfaces clipboard copy, while file export still lives in the controller layer and is not wired into the current UI.
+   Builds clipboard, text-file, and Markdown-file transcript output from the merged compatibility `segments` view. The refreshed shell currently surfaces clipboard copy, while file export still lives in the controller layer and is not wired into the current UI.
 
 ## Important Boundaries
 
@@ -85,6 +85,7 @@ These invariants [rules that should always stay true] are either already true or
 - The app must never start recording without required user permissions.
 - Heavy audio and transcription work must not block the main UI thread.
 - Transcript sessions should survive normal app restarts.
+- New sessions should store split `micSegments` and `systemSegments`, while the merged `segments` view stays available for exports and rollback compatibility.
 - Export should not mutate the saved source session.
 - If the product claims local transcription, raw meeting audio should not silently leave the machine.
 - Temporary task context should stay in memory until the team explicitly chooses a saved format.
