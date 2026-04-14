@@ -12,6 +12,9 @@ The app still has one main macOS window today.
 - The window opens at a fixed default size and hides the normal macOS title bar controls.
 - The bottom utility rail keeps the center transport clear, puts `Full screen` on the left, and keeps `Compile tasks`, `Set API key`, and `Copy text` on the right when the selected session is eligible for task review.
 - The controller still has `.txt` and `.md` file export code, but those file export actions are not surfaced in the current shell.
+- While recording, the canvas shows capture state only. It does not stream transcript text live.
+- After stop, the shell switches into a processing state while both sources are transcribed.
+- Finished sessions show two transcript panels, one for `MIC` and one for `SYSTEM`.
 
 ## Current Implemented States
 
@@ -20,9 +23,11 @@ The app still has one main macOS window today.
 - `ready to record`
   The app can request recording on the next `Record` click.
 - `recording`
-  The timer runs and new `MIC` or `SYSTEM` rows stream into the transcript.
+  The timer runs while mic and system audio are captured into separate temp files. The canvas does not show live transcript rows.
 - `stopping`
-  The app keeps the same screen while it flushes pending work.
+  The app keeps the same screen while it stops capture and moves into post-stop work.
+- `processing`
+  The app shows per-source transcription progress after stop. This is the main wait state before the finished transcript appears.
 - `error`
   The shell shows a blocked status. Detailed recovery text is tracked in the controller, but the refreshed shell does not render that full message yet. Partial transcripts still stay visible when they exist.
 - `post-transcript task review`
@@ -115,15 +120,17 @@ The transcript review flow stays in the same reading surface.
 4. Opening the sidebar shifts the transcript workspace to the right instead of covering it.
 5. Before recording starts, the main canvas shows only `Press record to begin the full transcript`.
 6. The user starts recording from the floating yellow button.
-7. Live transcript rows append into the centered column.
+7. The app records mic and system audio into separate temp files.
 8. The user can copy transcript text or toggle fullscreen from the bottom utility rail.
 9. The user stops recording from the same floating button.
-10. The finished transcript stays in place for review instead of switching to a different screen.
-11. If the finished transcript has usable text, the user can click `Compile tasks`.
-12. The review result opens inline below the transcript and keeps the transcript visible during loading, retry, and recompile states.
-13. The user can click `Prepare context` on one task.
-14. The app opens a right-side task-context panel and keeps the transcript visible.
-15. The final `Spawn agent` action is available only inside that panel.
+10. The shell enters a processing state while it batch-transcribes both sources.
+11. The finished transcript stays in place for review instead of switching to a different screen.
+12. Finished sessions show two transcript panels, one for `MIC` and one for `SYSTEM`.
+13. If the finished transcript has usable text, the user can click `Compile tasks`.
+14. The review result opens inline below the transcript and keeps the transcript visible during loading, retry, and recompile states.
+15. The user can click `Prepare context` on one task.
+16. The app opens a right-side task-context panel and keeps the transcript visible.
+17. The final `Spawn agent` action is available only inside that panel.
 
 ## Current UI Behavior
 
@@ -135,9 +142,15 @@ The transcript review flow stays in the same reading surface.
 
 ### Recording
 
-- Keep the transcript anchored as the main object.
+- Keep the transcript area calm while capture is running.
 - Make recording state obvious through the button label.
-- Do not add extra status copy above or below the transcript.
+- Do not add live transcript rows above or below the capture surface.
+
+### Processing
+
+- Keep the same layout.
+- Show that the app is transcribing both sources after stop.
+- Keep source-level status visible until both transcripts are ready.
 
 ### Stopping
 
@@ -157,6 +170,7 @@ The transcript review flow stays in the same reading surface.
 - Keep copy and fullscreen available in the bottom rail.
 - Let the sidebar support browsing without becoming the main focus.
 - Show `Compile tasks` only when the saved session is completed and has non-empty transcript text.
+- Show split `MIC` and `SYSTEM` panels for completed sessions.
 - Keep the `Suggested tasks` appendix tied to the selected session instead of making it a global panel.
 - Reset temporary task context when the user switches sessions or recompiles tasks.
 
@@ -167,7 +181,9 @@ These modules are now in code.
 - `WorkspaceShell`
   Owns the high-level window layout.
 - `TranscriptCanvasView`
-  Owns the main black canvas and centered reading column.
+  Owns the main black canvas, centered reading column, and recording or processing states.
+- `SourceTranscriptPanelsView`
+  Renders the split `MIC` and `SYSTEM` transcript panels for completed sessions.
 - `TaskAnalysisSectionView`
   Renders the inline `Suggested tasks` appendix inside the transcript column.
 - `TaskContextPanelView`
@@ -196,6 +212,7 @@ These modules are now in code.
 - Session titles are derived from transcript text instead of stored session metadata, so the label rule should stay consistent until a real title field exists.
 - File export still exists below the UI, so the team should decide whether to surface it again or keep the shell intentionally copy-first.
 - The final `Spawn agent` destination is still undefined, so the current panel stops at review plus placeholder spawn state.
+- The processing state needs to stay explicit or the app will feel frozen after stop.
 
 ## Where To Look
 

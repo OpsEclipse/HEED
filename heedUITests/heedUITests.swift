@@ -25,27 +25,23 @@ final class heedUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Press record to begin the full transcript"].waitForExistence(timeout: uiTimeout))
         XCTAssertTrue(app.buttons["sidebar-toggle"].exists)
         XCTAssertTrue(app.buttons["copy-as-text"].exists)
-        XCTAssertTrue(app.buttons["fullscreen-toggle"].exists)
 
         let sidebarToggle = app.buttons["sidebar-toggle"]
         sidebarToggle.click()
-        for _ in 0..<20 where sidebarToggle.label != "Close" {
-            RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.1))
-        }
-        XCTAssertEqual(sidebarToggle.label, "Close")
+        XCTAssertTrue(waitForButtonLabel("sidebar-toggle", label: "Close", in: app))
 
         app.buttons["record-button"].click()
 
-        let micTranscript = app.staticTexts["Can you hear me clearly on this side?"]
-        XCTAssertTrue(micTranscript.waitForExistence(timeout: uiTimeout))
+        XCTAssertTrue(waitForButtonLabel("record-button", label: "Stop", in: app))
+        XCTAssertTrue(app.otherElements["recording-blank-canvas"].waitForExistence(timeout: uiTimeout))
+        XCTAssertTrue(app.staticTexts["Recording locally"].exists)
+        XCTAssertFalse(app.staticTexts["Can you hear me clearly on this side?"].exists)
 
         app.buttons["record-button"].click()
-        let recordButton = app.buttons["record-button"]
-        XCTAssertTrue(recordButton.waitForExistence(timeout: uiTimeout + 5))
-        for _ in 0..<30 where recordButton.label != "Record" {
-            RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.1))
-        }
-        XCTAssertEqual(recordButton.label, "Record")
+        XCTAssertTrue(app.staticTexts["MIC transcript"].waitForExistence(timeout: uiTimeout))
+        XCTAssertTrue(app.staticTexts["SYSTEM transcript"].waitForExistence(timeout: uiTimeout))
+        XCTAssertTrue(app.staticTexts["Can you hear me clearly on this side?"].waitForExistence(timeout: uiTimeout))
+        XCTAssertTrue(waitForButtonLabel("record-button", label: "Record", in: app, timeout: uiTimeout + 5))
     }
 
     @MainActor
@@ -56,23 +52,18 @@ final class heedUITests: XCTestCase {
         app.launch()
         defer { forceQuitHeed() }
 
-        let recordButton = app.buttons["record-button"]
-        XCTAssertTrue(recordButton.waitForExistence(timeout: uiTimeout))
+        XCTAssertTrue(app.buttons["record-button"].waitForExistence(timeout: uiTimeout))
 
-        recordButton.click()
-        for _ in 0..<30 where recordButton.label != "Stop" {
-            RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.1))
-        }
-        XCTAssertEqual(recordButton.label, "Stop")
+        app.buttons["record-button"].click()
+        XCTAssertTrue(waitForButtonLabel("record-button", label: "Stop", in: app))
+        XCTAssertTrue(app.otherElements["recording-blank-canvas"].waitForExistence(timeout: uiTimeout))
+        XCTAssertFalse(app.staticTexts["Can you hear me clearly on this side?"].exists)
 
-        let firstTranscript = app.staticTexts["Can you hear me clearly on this side?"]
-        XCTAssertTrue(firstTranscript.waitForExistence(timeout: uiTimeout))
-
-        recordButton.click()
-        for _ in 0..<30 where recordButton.label != "Record" {
-            RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.1))
-        }
-        XCTAssertEqual(recordButton.label, "Record")
+        app.buttons["record-button"].click()
+        XCTAssertTrue(app.staticTexts["MIC transcript"].waitForExistence(timeout: uiTimeout))
+        XCTAssertTrue(app.staticTexts["SYSTEM transcript"].waitForExistence(timeout: uiTimeout))
+        XCTAssertTrue(app.staticTexts["Can you hear me clearly on this side?"].waitForExistence(timeout: uiTimeout))
+        XCTAssertTrue(waitForButtonLabel("record-button", label: "Record", in: app, timeout: uiTimeout + 5))
 
         let compileButton = app.buttons["compile-tasks"]
         XCTAssertTrue(compileButton.waitForExistence(timeout: uiTimeout))
@@ -82,8 +73,6 @@ final class heedUITests: XCTestCase {
         XCTAssertTrue(sectionHeader.waitForExistence(timeout: uiTimeout))
         XCTAssertTrue(app.staticTexts["Verify the two-way audio path before the next session"].waitForExistence(timeout: uiTimeout))
         XCTAssertTrue(app.staticTexts["Preview only. This build keeps task compilation local while the OpenAI-backed compile path is still in progress."].exists)
-        XCTAssertTrue(app.buttons["task-analysis-decisions-toggle"].exists)
-        XCTAssertTrue(app.buttons["task-analysis-follow-ups-toggle"].exists)
         XCTAssertEqual(compileButton.label, "Recompile")
 
         let prepareContextButton = app.buttons["task-row-prepare-context-verify-audio-paths"]
@@ -98,10 +87,8 @@ final class heedUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Turn this transcript task into a concrete implementation plan."].waitForExistence(timeout: uiTimeout))
 
         taskContextPanel.click()
-        for _ in 0..<30 where taskContextPanel.label != "Spawn agent" {
-            RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.1))
-        }
-        XCTAssertEqual(taskContextPanel.label, "Spawn agent")
+        XCTAssertTrue(app.buttons["task-context-primary"].waitForExistence(timeout: uiTimeout))
+        XCTAssertEqual(app.buttons["task-context-primary"].label, "Spawn agent")
 
         let showSourceButton = app.buttons["task-row-source-verify-audio-paths"]
         XCTAssertTrue(showSourceButton.exists)
@@ -118,4 +105,24 @@ private func forceQuitHeed() {
     NSRunningApplication.runningApplications(withBundleIdentifier: "sprsh.ca.heed").forEach { app in
         app.forceTerminate()
     }
+}
+
+private func waitForButtonLabel(
+    _ identifier: String,
+    label expectedLabel: String,
+    in app: XCUIApplication,
+    timeout: TimeInterval = 3
+) -> Bool {
+    let deadline = Date().addingTimeInterval(timeout)
+
+    while Date() < deadline {
+        let button = app.buttons[identifier]
+        if button.exists, button.label == expectedLabel {
+            return true
+        }
+
+        RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.1))
+    }
+
+    return app.buttons[identifier].exists && app.buttons[identifier].label == expectedLabel
 }

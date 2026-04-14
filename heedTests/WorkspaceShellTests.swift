@@ -42,7 +42,7 @@ struct WorkspaceShellTests {
             apiKeySettingsViewModel: apiKeySettingsViewModel
         )
 
-        #expect(shell.utilityPrimaryStatus == nil)
+        #expect(shell.utilityPrimaryStatus == "Ready to record")
         #expect(shell.utilitySecondaryStatus == nil)
         #expect(shell.utilityDetails.isEmpty)
         #expect(shell.leadingUtilityActions.map(\.title) == ["Full screen"])

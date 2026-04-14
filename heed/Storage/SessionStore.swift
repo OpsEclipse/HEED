@@ -78,7 +78,7 @@ actor SessionStore {
         try FileManager.default.removeItem(at: sessionDirectory)
     }
 
-    func sessionDirectoryURL(for sessionID: UUID) -> URL {
+    nonisolated func sessionDirectoryURL(for sessionID: UUID) -> URL {
         baseDirectoryURL.appending(path: sessionID.uuidString, directoryHint: .isDirectory)
     }
 

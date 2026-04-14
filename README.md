@@ -1,8 +1,8 @@
 # Heed
 
-Heed is a macOS app for local meeting transcription. It captures microphone audio and system audio, turns both into text on-device, keeps a local session history you can review later, and now has an on-demand OpenAI task pass for turning a finished transcript into actionable work.
+Heed is a macOS app for local meeting transcription. It captures microphone audio and system audio into separate local temp files during recording, transcribes both sources on-device after stop, keeps a local session history you can review later, and now has an on-demand OpenAI task pass for turning a finished transcript into actionable work.
 
-Today, the repo contains a real first v1 path. The app has a transcript-first window, a collapsible sessions sidebar, a floating record or stop button, local permission gating, source-specific audio pipelines, speech-aware chunking, Whisper-backed local transcription through a bundled helper tool, JSON session autosave, relaunch recovery, clipboard copy, a Keychain-backed OpenAI API key setting, a `Compile tasks` flow, and a temporary task-context side panel. The code also still contains `.txt` and `.md` export paths, but the refreshed shell does not surface those file export actions yet.
+Today, the repo contains a real first v1 path. The app has a transcript-first window, a collapsible sessions sidebar, a floating record or stop button, local permission gating, separate source capture files, batch transcription after stop, Whisper-backed local transcription through a bundled helper tool, JSON session autosave, relaunch recovery, clipboard copy, a Keychain-backed OpenAI API key setting, a `Compile tasks` flow, and a temporary task-context side panel. The recording view does not show live transcript text while capture is running. The finished view shows separate `MIC` and `SYSTEM` transcript panels. The code also still contains `.txt` and `.md` export paths, but the refreshed shell does not surface those file export actions yet.
 
 ## What Exists Today
 
@@ -18,6 +18,9 @@ Important current facts:
 
 - The app is a single `WindowGroup`.
 - The current shell is transcript-first. It centers the transcript, hides the sidebar by default, and keeps the main record or stop action in one compact floating button.
+- While recording, the app shows capture status instead of live transcript text.
+- After stop, the app enters a processing state while it batch-transcribes both sources.
+- Finished sessions render separate `MIC` and `SYSTEM` transcript panels.
 - The bottom utility rail keeps the record button centered, puts a fullscreen toggle on the left, and keeps `Set API key` plus `Copy text` on the right. It also shows `Compile tasks` when the selected session is eligible.
 - The project uses generated Info.plist values, not a checked-in `Info.plist`.
 - The app target deploys to macOS `14.0`.
@@ -55,7 +58,7 @@ The planned product path in this repo is:
 
 1. Keep permission handling and recovery clear.
 2. Improve real-world capture robustness across device changes.
-3. Tune first-chunk and steady-state Whisper latency.
+3. Tune post-stop Whisper latency for long sessions.
 4. Decide whether file export actions return to the refreshed shell or stay controller-only for now.
 5. Decide what the final `Spawn agent` action should hand off to after the task-context panel.
 6. Add more manual smoke coverage for meeting apps.

@@ -28,7 +28,7 @@ struct FloatingTransportView: View {
                     size: .primary
                 )
             )
-            .disabled(!isEnabled || recordingState == .stopping || recordingState == .requestingPermissions)
+            .disabled(!isEnabled || recordingState == .stopping || recordingState == .requestingPermissions || recordingState == .processing)
             .accessibilityIdentifier("record-button")
     }
 
@@ -152,6 +152,12 @@ struct HeedTransportButtonStyle: ButtonStyle {
 #Preview("Stopping") {
     previewContainer {
         FloatingTransportView(recordingState: .stopping) { }
+    }
+}
+
+#Preview("Processing") {
+    previewContainer {
+        FloatingTransportView(recordingState: .processing) { }
     }
 }
 
