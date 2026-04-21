@@ -154,6 +154,53 @@ struct TaskPrepControllerTests {
         #expect(state.pendingSpawnRequest == .init(reason: "ready"))
     }
 
+    @Test func approveSpawnUpdatesVisibleControllerState() async throws {
+        let service = ControlledTaskPrepConversationService()
+        let controller = await MainActor.run {
+            TaskPrepController(service: service)
+        }
+
+        await MainActor.run {
+            controller.start(task: sampleTask(), in: sampleSession())
+        }
+
+        _ = try await waitForPrepState(controller) { state in
+            state.turnState == .streaming
+        }
+
+        await MainActor.run {
+            controller.approveSpawn()
+        }
+
+        let state = await MainActor.run { controller.viewState }
+        #expect(state.spawnStatus == .approvalGranted)
+    }
+
+    @Test func sendUserMessageIsIgnoredWhileTurnIsStillStreaming() async throws {
+        let service = ControlledTaskPrepConversationService()
+        let controller = await MainActor.run {
+            TaskPrepController(service: service)
+        }
+
+        await MainActor.run {
+            controller.start(task: sampleTask(), in: sampleSession())
+        }
+
+        try await waitForPendingTurnCount(1, service: service)
+
+        await MainActor.run {
+            controller.sendUserMessage("Do this follow-up too")
+        }
+
+        let state = await MainActor.run { controller.viewState }
+        #expect(state.messages.count == 1)
+        #expect(state.messages[0].role == .assistant)
+        #expect(state.messages[0].text.isEmpty)
+        #expect(state.turnState == .streaming)
+        #expect(await MainActor.run(body: { service.pendingTurnCount }) == 1)
+        #expect(await MainActor.run(body: { service.sentUserMessages }) == [])
+    }
+
     @Test func sendUserMessageAppendsUserMessageAndStartsNextAssistantTurn() async throws {
         let service = ControlledTaskPrepConversationService()
         let controller = await MainActor.run {
@@ -230,6 +277,60 @@ struct TaskPrepControllerTests {
         #expect(state.messages[0].text == "Partial answer")
         #expect(state.messages[0].isInterrupted == true)
         #expect(state.turnState == .failed("The streamed response ended before the turn completed."))
+    }
+
+    @Test func staleFirstTurnDoesNotOverwriteSecondTaskState() async throws {
+        let service = ControlledTaskPrepConversationService()
+        let firstTask = sampleTask(id: "task-one", title: "First task")
+        let secondTask = sampleTask(id: "task-two", title: "Second task")
+        let firstSession = sampleSession()
+        let secondSession = sampleSession(
+            firstText: "Second session detail",
+            secondText: "Keep this second session visible."
+        )
+        let controller = await MainActor.run {
+            TaskPrepController(service: service)
+        }
+
+        await MainActor.run {
+            controller.start(task: firstTask, in: firstSession)
+            controller.start(task: secondTask, in: secondSession)
+        }
+
+        try await waitForPendingTurnCount(2, service: service)
+
+        service.completeTurn(
+            at: 0,
+            with: [
+                .assistantTextDelta("Late first turn text"),
+                .contextDraft(sampleDraft(summary: "Late first draft", goal: "Should stay stale")),
+                .completed
+            ]
+        )
+
+        try await Task.sleep(for: .milliseconds(50))
+        let staleState = await MainActor.run { controller.viewState }
+        #expect(staleState.messages.count == 1)
+        #expect(staleState.messages[0].text.isEmpty)
+        #expect(staleState.turnState == .streaming)
+        #expect(staleState.stableContextDraft == nil)
+
+        service.completeTurn(
+            at: 0,
+            with: [
+                .assistantTextDelta("Second turn text"),
+                .contextDraft(sampleDraft(summary: "Second draft", goal: "Use the current task")),
+                .completed
+            ]
+        )
+
+        let finalState = try await waitForPrepState(controller) { state in
+            state.turnState == .completed
+        }
+
+        #expect(finalState.messages.count == 1)
+        #expect(finalState.messages[0].text == "Second turn text")
+        #expect(finalState.stableContextDraft?.summary == "Second draft")
     }
 
     @Test func resetCancelsInFlightTurnAndClearsTemporaryPrepState() async throws {
@@ -333,10 +434,31 @@ private final class ControlledTaskPrepConversationService: TaskPrepConversationS
         pendingTurn.continuation.finish(throwing: error)
     }
 
+    func completeTurn(at index: Int, with events: [TaskPrepConversationEvent]) {
+        guard pendingTurns.indices.contains(index) else {
+            return
+        }
+
+        let pendingTurn = pendingTurns.remove(at: index)
+        for event in events {
+            pendingTurn.continuation.yield(event)
+        }
+        pendingTurn.continuation.finish()
+    }
+
     var pendingTurnCount: Int { pendingTurns.count }
     var lastTurnInput: TaskPrepTurnInput? { lastInput }
     var sentUserMessages: [String] { sentMessages }
     var submittedTranscripts: [SubmittedTranscript] { submittedRequests }
+}
+
+private struct WaitForPrepStateError: Error, CustomStringConvertible {
+    let attempts: Int
+    let state: TaskPrepViewState
+
+    var description: String {
+        "Timed out after \(attempts) checks. Last state: \(state)"
+    }
 }
 
 private struct SubmittedTranscript: Equatable, Sendable {
@@ -366,7 +488,8 @@ private func waitForPrepState(
         try await Task.sleep(for: .milliseconds(25))
     }
 
-    return await MainActor.run { controller.viewState }
+    let state = await MainActor.run { controller.viewState }
+    throw WaitForPrepStateError(attempts: attempts, state: state)
 }
 
 private func waitForPendingTurnCount(
@@ -401,7 +524,11 @@ private func waitForSubmittedTranscriptCount(
     #expect(await MainActor.run(body: { service.submittedTranscripts.count }) >= expectedCount)
 }
 
-private func sampleSession() -> TranscriptSession {
+private func sampleSession(
+    firstText: String = "We should prepare a context packet.",
+    secondText: String = "The side panel should stay visible.",
+    thirdText: String = "That keeps the transcript easy to review."
+) -> TranscriptSession {
     TranscriptSession(
         startedAt: Date(timeIntervalSince1970: 0),
         endedAt: Date(timeIntervalSince1970: 12),
@@ -410,9 +537,9 @@ private func sampleSession() -> TranscriptSession {
         modelName: "ggml-base.en",
         appVersion: "1.0",
         segments: [
-            TranscriptSegment(source: .mic, startedAt: 1, endedAt: 2, text: "We should prepare a context packet."),
-            TranscriptSegment(source: .system, startedAt: 3, endedAt: 4, text: "The side panel should stay visible."),
-            TranscriptSegment(source: .mic, startedAt: 5, endedAt: 6, text: "That keeps the transcript easy to review.")
+            TranscriptSegment(source: .mic, startedAt: 1, endedAt: 2, text: firstText),
+            TranscriptSegment(source: .system, startedAt: 3, endedAt: 4, text: secondText),
+            TranscriptSegment(source: .mic, startedAt: 5, endedAt: 6, text: thirdText)
         ]
     )
 }

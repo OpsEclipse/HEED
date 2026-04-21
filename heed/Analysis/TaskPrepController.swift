@@ -10,7 +10,6 @@ final class TaskPrepController: ObservableObject {
     private var activeTask: CompiledTask?
     private var activeTurnTask: Task<Void, Never>?
     private var activeTurnID = UUID()
-    private var spawnApprovalGranted = false
 
     init(service: any TaskPrepConversationServicing) {
         self.service = service
@@ -19,7 +18,6 @@ final class TaskPrepController: ObservableObject {
     func start(task: CompiledTask, in session: TranscriptSession) {
         activeTask = task
         activeSession = session
-        spawnApprovalGranted = false
 
         beginTurn(
             with: service.beginTurn(input: TaskPrepTurnInput(task: task, session: session)),
@@ -33,6 +31,10 @@ final class TaskPrepController: ObservableObject {
             return
         }
 
+        guard viewState.turnState != .streaming else {
+            return
+        }
+
         beginTurn(
             with: service.sendUserMessage(message),
             resetConversation: false,
@@ -41,14 +43,13 @@ final class TaskPrepController: ObservableObject {
     }
 
     func approveSpawn() {
-        spawnApprovalGranted = true
+        viewState.spawnStatus = .approvalGranted
     }
 
     func reset() {
         cancelActiveTurn()
         activeTask = nil
         activeSession = nil
-        spawnApprovalGranted = false
         viewState = TaskPrepViewState()
     }
 
@@ -72,7 +73,9 @@ final class TaskPrepController: ObservableObject {
             viewState.messages.append(TaskPrepMessage(role: .assistant, text: ""))
             viewState.turnState = .streaming
             viewState.pendingContextDraft = nil
-            viewState.spawnStatus = .idle
+            if viewState.spawnStatus != .approvalGranted {
+                viewState.spawnStatus = .idle
+            }
             viewState.pendingSpawnRequest = nil
         }
 
@@ -113,9 +116,8 @@ final class TaskPrepController: ObservableObject {
             service.submitTranscript(scope: scope, session: activeSession)
         case let .spawnAgentRequest(request):
             viewState.pendingSpawnRequest = request
-            if spawnApprovalGranted {
+            if viewState.spawnStatus == .approvalGranted {
                 viewState.spawnStatus = .readyToSpawn
-                spawnApprovalGranted = false
             } else {
                 viewState.spawnStatus = .blockedWaitingForApproval
             }

@@ -73,6 +73,7 @@ enum TaskPrepTurnState: Equatable, Sendable {
 
 enum TaskPrepSpawnStatus: Equatable, Sendable {
     case idle
+    case approvalGranted
     case blockedWaitingForApproval
     case readyToSpawn
 }
