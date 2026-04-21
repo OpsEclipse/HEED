@@ -3,6 +3,7 @@ import Foundation
 enum OpenAIStreamEvent: Equatable, Sendable {
     case textDelta(String)
     case functionArgumentsDelta(String)
+    case functionCallCompleted(name: String, arguments: String)
     case completed
     case failed(String)
 }
@@ -77,7 +78,10 @@ struct OpenAIResponsesStreamParser {
         case "response.function_call_arguments.delta":
             return .functionArgumentsDelta(try decodeStringField(named: "delta", in: payload, event: name))
         case "response.function_call_arguments.done":
-            return nil
+            return .functionCallCompleted(
+                name: try decodeStringField(named: "name", in: payload, event: name),
+                arguments: try decodeStringField(named: "arguments", in: payload, event: name)
+            )
         case "response.completed":
             return .completed
         case "error":
