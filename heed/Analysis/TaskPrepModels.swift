@@ -71,7 +71,17 @@ enum TaskPrepTurnState: Equatable, Sendable {
     case completed
 }
 
+enum TaskPrepSpawnStatus: Equatable, Sendable {
+    case idle
+    case blockedWaitingForApproval
+    case readyToSpawn
+}
+
 struct TaskPrepViewState: Equatable, Sendable {
     var messages: [TaskPrepMessage] = []
     var turnState: TaskPrepTurnState = .idle
+    var pendingContextDraft: TaskPrepContextDraft?
+    var stableContextDraft: TaskPrepContextDraft?
+    var spawnStatus: TaskPrepSpawnStatus = .idle
+    var pendingSpawnRequest: TaskPrepSpawnRequest?
 }
