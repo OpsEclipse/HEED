@@ -74,49 +74,6 @@ struct OpenAITaskCompilersTests {
         #expect(systemPrompt?.contains("Use miscellaneous for non-feature, non-bug action items") == true)
     }
 
-    @Test func taskContextCompilerMapsEvidenceIntoPanelContent() async throws {
-        let transport = StubOpenAITransport(
-            data: """
-            {
-              "output": [
-                {
-                  "content": [
-                    {
-                      "type": "output_text",
-                      "text": "{\\"goal\\":\\"Prepare the task before handing it to an agent.\\",\\"whyItMatters\\":\\"The user wants to review context first.\\",\\"implementationNotes\\":[\\"Keep the transcript visible.\\",\\"Run the second pass only when the user asks.\\"],\\"acceptanceCriteria\\":[\\"The panel opens on the right.\\",\\"The final Spawn agent button lives inside the panel.\\"],\\"risks\\":[\\"The wrong task could stay selected after a refresh.\\"],\\"suggestedSkills\\":[\\"SwiftUI\\",\\"Structured output\\"],\\"evidence\\":[{\\"label\\":\\"Transcript evidence\\",\\"excerpt\\":\\"We need compile tasks to actually send the transcript to an LLM.\\",\\"evidenceIndices\\":[2]}]}"
-                    }
-                  ]
-                }
-              ]
-            }
-            """,
-            statusCode: 200
-        )
-        let compiler = OpenAITaskContextCompiler(
-            client: OpenAIResponsesClient(
-                apiKeyProvider: { "sk-test" },
-                transport: transport
-            )
-        )
-
-        let session = sampleTranscriptSession()
-        let task = CompiledTask(
-            id: "implement-openai-compile-flow",
-            title: "Implement OpenAI compile flow",
-            details: "Replace the fixture compiler with a real OpenAI request.",
-            type: .feature,
-            assigneeHint: "Mac engineer",
-            evidenceSegmentIDs: [session.segments[1].id],
-            evidenceExcerpt: session.segments[1].text
-        )
-
-        let content = try await compiler.prepareTaskContext(session: session, task: task)
-
-        #expect(content.goal == "Prepare the task before handing it to an agent.")
-        #expect(content.evidence.count == 1)
-        #expect(content.evidence[0].segmentIDs == [session.segments[1].id])
-        #expect(content.suggestedSkills == ["SwiftUI", "Structured output"])
-    }
 }
 
 private actor StubOpenAITransport: OpenAIResponsesTransport {

@@ -15,6 +15,7 @@ The app still has one main macOS window today.
 - While recording, the canvas shows capture state only. It does not stream transcript text live.
 - After stop, the shell switches into a processing state while both sources are transcribed.
 - Finished sessions show two transcript panels, one for `MIC` and one for `SYSTEM`.
+- `Prepare context` now replaces the transcript canvas with a split task-prep workspace.
 
 ## Current Implemented States
 
@@ -31,7 +32,9 @@ The app still has one main macOS window today.
 - `error`
   The shell shows a blocked status. Detailed recovery text is tracked in the controller, but the refreshed shell does not render that full message yet. Partial transcripts still stay visible when they exist.
 - `post-transcript task review`
-  A completed transcript with real text can show an inline `Suggested tasks` appendix after the user clicks `Compile tasks`. One task can then open a separate right-side context panel.
+  A completed transcript with real text can show an inline `Suggested tasks` appendix after the user clicks `Compile tasks`.
+- `task prep workspace`
+  A selected compiled task opens a split workspace with a left chat pane and a right context brief pane. Assistant turns stream into the chat. The brief panel pins a stable draft only after the turn completes.
 
 ## Refresh Status
 
@@ -57,7 +60,6 @@ This is the default visual focus.
 - When there is no transcript yet, the canvas shows only `Press record to begin the full transcript`.
 - When task review is present, it renders as one inline appendix below the transcript instead of replacing the screen.
 - Source jumps from the appendix scroll back to the matching transcript segment and briefly highlight it.
-- When task context is present, it renders in a right-side panel while the transcript stays visible.
 
 ### Sidebar
 
@@ -104,13 +106,37 @@ The transcript review flow stays in the same reading surface.
 - Each task row now uses `Prepare context` instead of the old placeholder `Spawn agent` action.
 - The current shipped build uses real OpenAI calls in the normal app and fixture data only for UI-test mode.
 
-### Task Context Panel
+### Task Prep Workspace
 
-- `Prepare context` runs a second OpenAI pass for one task.
-- The panel opens on the right side of the shell.
-- The panel shows loading, retry, and loaded states.
-- The real `Spawn agent` button now lives inside that panel.
-- The current `Spawn agent` action is still only a placeholder state change. Final handoff wiring is still pending.
+`Prepare context` opens a separate workspace inside the main shell.
+
+- The workspace is a split layout [a screen divided into two side-by-side areas].
+- The left pane is the prep chat.
+- The right pane is a fixed-width context brief panel.
+- The transcript canvas is hidden while this workspace is open.
+- The sidebar toggle still stays available in the shell chrome.
+- A close button in the right panel resets prep state and returns the shell to the transcript canvas.
+
+### Left Prep Chat
+
+The chat pane is the live conversation surface.
+
+- It shows the selected task title at the top.
+- It shows streamed GPT-5.4 replies as text deltas [small text pieces that arrive one after another].
+- It shows user follow-up messages between assistant turns.
+- The input row stays disabled while a turn is streaming.
+- Interrupted turns keep their partial text and mark the assistant bubble as interrupted.
+
+### Right Context Brief Panel
+
+The right pane is the stable handoff draft.
+
+- It shows `Summary`, `Goal`, `Constraints`, `Acceptance`, `Risks`, `Open questions`, and `Evidence`.
+- It renders the latest pending brief while a turn is streaming.
+- It promotes that pending brief to the stable brief only after the controller receives a completed turn.
+- It shows `Updating brief...` when a new draft arrives during a later turn.
+- It includes a `Spawn approval` section that explains whether the model has asked to spawn and whether the user approved it.
+- It shows `Approve spawn` only when a spawn request is blocked waiting for approval.
 
 ## Current Interaction Pattern
 
@@ -129,8 +155,12 @@ The transcript review flow stays in the same reading surface.
 13. If the finished transcript has usable text, the user can click `Compile tasks`.
 14. The review result opens inline below the transcript and keeps the transcript visible during loading, retry, and recompile states.
 15. The user can click `Prepare context` on one task.
-16. The app opens a right-side task-context panel and keeps the transcript visible.
-17. The final `Spawn agent` action is available only inside that panel.
+16. The app swaps the main canvas into the split prep workspace.
+17. The first assistant turn streams into the left chat pane.
+18. If the model asks for more evidence, the service uses a read-only transcript tool for the selected session only.
+19. The right panel pins a stable brief after the turn completes.
+20. If the model asks to spawn, the right panel shows the approval request and the user can click `Approve spawn`.
+21. Closing the workspace, switching sessions, or starting prep for another task clears the prep chat and brief because they are intentionally temporary.
 
 ## Current UI Behavior
 
@@ -172,7 +202,15 @@ The transcript review flow stays in the same reading surface.
 - Show `Compile tasks` only when the saved session is completed and has non-empty transcript text.
 - Show split `MIC` and `SYSTEM` panels for completed sessions.
 - Keep the `Suggested tasks` appendix tied to the selected session instead of making it a global panel.
-- Reset temporary task context when the user switches sessions or recompiles tasks.
+- Reset task-prep state when the user switches sessions or recompiles tasks.
+
+### Running Task Prep
+
+- Open one prep workspace for one task at a time.
+- Stream assistant text into the left pane instead of waiting for one full message.
+- Keep the latest stable brief visible on the right while a follow-up turn is in flight.
+- Do not persist the prep chat or prep brief to disk.
+- Keep spawn blocked until the user explicitly approves it.
 
 ## Current Modules
 
@@ -186,8 +224,12 @@ These modules are now in code.
   Renders the split `MIC` and `SYSTEM` transcript panels for completed sessions.
 - `TaskAnalysisSectionView`
   Renders the inline `Suggested tasks` appendix inside the transcript column.
-- `TaskContextPanelView`
-  Renders the temporary right-side task context panel.
+- `TaskPrepWorkspaceView`
+  Renders the split prep layout.
+- `TaskPrepChatView`
+  Renders the streamed chat thread and follow-up input row.
+- `TaskPrepContextPanelView`
+  Renders the right-side stable brief and spawn approval state.
 - `SessionSidebarView`
   Shows session titles and selection state.
 - `UtilityRailView`
@@ -204,14 +246,14 @@ These modules are now in code.
 - Extreme minimalism can remove useful feedback if status text becomes too faint.
 - Long transcripts can still feel heavy if the centered column is too wide or too cramped.
 - The inline task appendix can get dense if long evidence text or many items stack below the transcript.
-- The right-side task panel can squeeze the transcript on smaller window widths.
+- The fixed right prep panel can squeeze the left chat pane on smaller window widths.
 - Permission and error states still need to feel first-class, even inside a very quiet layout.
 - The controller stores richer error text than the current shell renders, so blocked recovery still feels under-explained on screen.
-- The current macOS UI automation around the transport state transition is still somewhat flaky.
-- Local macOS accessibility authorization can block UI automation before the new inline review path finishes running.
+- The prep workspace is intentionally temporary, so users can lose unsaved prep context when they close it or switch sessions.
+- Local macOS UI automation is still somewhat flaky. The functional task-prep test exists, but launch-performance coverage stays skipped because the harness is not stable enough there.
+- Local macOS accessibility authorization can still block UI automation before the inline review or prep path finishes running.
 - Session titles are derived from transcript text instead of stored session metadata, so the label rule should stay consistent until a real title field exists.
 - File export still exists below the UI, so the team should decide whether to surface it again or keep the shell intentionally copy-first.
-- The final `Spawn agent` destination is still undefined, so the current panel stops at review plus placeholder spawn state.
 - The processing state needs to stay explicit or the app will feel frozen after stop.
 
 ## Where To Look
@@ -219,6 +261,7 @@ These modules are now in code.
 - Current root view: [`../heed/ContentView.swift`](../heed/ContentView.swift)
 - Current app scene: [`../heed/heedApp.swift`](../heed/heedApp.swift)
 - Current shell: [`../heed/UI/WorkspaceShell.swift`](../heed/UI/WorkspaceShell.swift)
-- Planned visual rules: [`DESIGN.md`](DESIGN.md)
-- UI refresh record: [`exec-plans/completed/minimalist-ui-refresh.md`](exec-plans/completed/minimalist-ui-refresh.md)
+- Prep workspace: [`../heed/UI/TaskPrepWorkspaceView.swift`](../heed/UI/TaskPrepWorkspaceView.swift)
+- Prep chat: [`../heed/UI/TaskPrepChatView.swift`](../heed/UI/TaskPrepChatView.swift)
+- Prep brief panel: [`../heed/UI/TaskPrepContextPanelView.swift`](../heed/UI/TaskPrepContextPanelView.swift)
 - Product rules: [`PRODUCT_SENSE.md`](PRODUCT_SENSE.md)

@@ -132,6 +132,10 @@ Retire these only after the new prep flow is green and all references are remove
 - 2026-04-20: Approved the design spec in `docs/superpowers/specs/2026-04-20-task-prep-chat-workspace-design.md`.
 - 2026-04-20: Wrote this active execution plan.
 - 2026-04-20: Completed Task 1 by adding the new prep domain model, the minimal controller and service seam, and the first streaming-turn controller test.
+- 2026-04-21: Shipped the split task-prep workspace in `WorkspaceShell` with a left prep chat, a right context brief panel, streamed GPT-5.4 turns, and fixture-mode coverage for UI tests.
+- 2026-04-21: Shipped the prep controller behavior for pending-versus-stable briefs, follow-up turns, selected-session transcript tool requests, stale-turn cancellation, and explicit approval before a spawn request becomes ready.
+- 2026-04-21: Updated the docs set to describe the shipped workspace as memory-only. Prep chat history and prep briefs do not persist to disk.
+- 2026-04-21: The functional macOS UI flow now covers `Prepare context`, but the local harness still has some flake [an intermittent test failure]. Launch-performance coverage stays intentionally skipped for now.
 
 ## Surprises & Discoveries
 
@@ -148,7 +152,10 @@ Retire these only after the new prep flow is green and all references are remove
 
 ## Outcomes & Retrospective
 
-- 2026-04-20: Task 1 is complete; the prep domain model and controller seam now exist, but later prep-chat tasks are still in flight.
+- 2026-04-21: The old one-shot task-context panel has been replaced by the shipped task-prep workspace. The app now opens a split layout from `Prepare context`, streams GPT-5.4 replies into the left chat, and pins a structured context brief in the right panel after completed turns.
+- 2026-04-21: The shipped prep flow keeps the transcript tool read-only and scoped to the selected session. It also keeps prep state temporary in memory only.
+- 2026-04-21: The spawn path is guarded in two places: the model prompt asks for explicit approval, and app state blocks the request until the user approves it.
+- 2026-04-21: Unit coverage now exercises streaming assembly, transcript-tool round-trips, stale-turn protection, interrupted turns, and approval gating. The macOS UI harness covers the main prep flow, but local harness flake still limits confidence for launch-performance style checks.
 
 ## Task 1: Lock The New Prep Domain Model
 

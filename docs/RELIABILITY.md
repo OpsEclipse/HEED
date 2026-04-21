@@ -82,13 +82,24 @@
 ## OpenAI Task Compilation
 
 - Why it matters:
-  This is the new post-meeting action path, so failures here directly shape whether users trust the app’s AI layer.
+  This is the first AI step after a transcript is ready.
 - Main failure modes:
-  Missing API key, network failure, malformed structured output, one deliverable being split into too many tasks, stale pass 1 results landing on the wrong session, or stale pass 2 results landing on the wrong task.
+  Missing API key, network failure, malformed structured output, one deliverable being split into too many tasks, or stale compile results landing on the wrong session.
 - Current confidence:
-  Medium. The app now uses an explicit two-pass OpenAI flow, keeps pass 2 temporary in memory, resets task context on session changes and recompiles, and has tests for structured decoding plus stale task-context requests. Pass 1 now returns grouped tasks only with the types `Feature`, `Bug fix`, and `Miscellaneous`.
+  Medium. The app uses an explicit pass-1 compile flow, returns grouped tasks only with the types `Feature`, `Bug fix`, and `Miscellaneous`, and resets prep state when the selected session changes or the user recompiles.
 - Best next step:
-  Add request logging with request IDs, manual network-off checks, and one test double for malformed OpenAI output at the shell level.
+  Add request logging with request IDs and manual network-off checks.
+
+## Task-Prep Workspace
+
+- Why it matters:
+  This is the live handoff-prep surface after task compilation. It is where users decide whether the task has enough context to move forward.
+- Main failure modes:
+  A streamed turn ends before completion, the parser drops partial text, a stale turn lands on the wrong task, the transcript tool reads from the wrong session, the brief pins too early, the spawn approval state leaks across tasks, or users lose work because the prep workspace is intentionally not persisted.
+- Current confidence:
+  Medium. `TaskPrepController` cancels stale turns, ignores late events from older turns, keeps interrupted partial text visible, promotes the brief only after a completed event, resets on session changes, and blocks spawn until explicit approval. Tests cover streamed message assembly, transcript-tool submission, malformed streamed events, interrupted turns, stale-turn protection, and the approval guard.
+- Best next step:
+  Add more end-to-end checks against real network turns, then decide how a future approved spawn should surface beyond the current ready state.
 
 ## Export
 
@@ -101,14 +112,25 @@
 - Best next step:
   Decide whether file export should return to the shell, then add a clearer success state for copy or file-save actions.
 
+## UI Test Harness
+
+- Why it matters:
+  The shipped task-prep workspace now depends on macOS UI coverage for confidence in the end-to-end flow.
+- Main failure modes:
+  Local accessibility authorization blocks the run, window activation races on launch, or the harness flakes intermittently [fails some runs but not others] even when the app is fine.
+- Current confidence:
+  Medium-low. There is a real UI test for the record, compile, and prep flow, but the local macOS harness is still not stable enough for launch-performance coverage, which stays skipped on purpose.
+- Best next step:
+  Keep the functional prep test, keep fixture timing simple, and continue treating local UI-test flakes as a separate harness problem instead of silent product truth.
+
 ## Current Trust Summary
 
-The repo is now trustworthy enough for a first end-to-end local path in development plus an explicit post-meeting AI path. The biggest remaining gaps are deeper real-world validation across permission resets, device changes, live meeting apps, and failure handling around the new network task pipeline.
+The repo is trustworthy enough for a first end-to-end local transcript path plus a shipped task-prep workspace. The biggest remaining gaps are deeper real-world validation across permission resets, device changes, live meeting apps, and more real-network validation for the streamed prep flow.
 
 ## Practices That Would Improve Trust
 
-- Add structured logging [consistent machine-readable logs] around permissions, capture start and stop, chunk delivery, and save events.
-- Keep short manual smoke tests [small real-world checks] for Zoom, Meet, and device switching.
+- Add structured logging [consistent machine-readable logs] around permissions, capture start and stop, batch transcription timing, streamed prep turns, and save events.
+- Keep short manual smoke tests [small real-world checks] for Zoom, Meet, device switching, and the task-prep workspace.
 - Save known-good sample outputs during development.
 - Keep crash-safe autosave and add more save-failure coverage before polishing export.
 - Write one long-run soak test [a test that runs for a long time to catch stability issues] once capture works.
