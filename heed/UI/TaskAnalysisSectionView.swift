@@ -2,7 +2,7 @@ import SwiftUI
 
 struct TaskAnalysisSectionView: View {
     @ObservedObject var controller: TaskAnalysisController
-    @ObservedObject var taskContextController: TaskContextController
+    @ObservedObject var taskPrepController: TaskPrepController
     let displayedSession: TranscriptSession?
 
     var body: some View {
@@ -139,7 +139,7 @@ struct TaskAnalysisSectionView: View {
                                     return
                                 }
 
-                                taskContextController.prepareTaskContext(for: task, in: displayedSession)
+                                taskPrepController.start(task: task, in: displayedSession)
                             },
                             onShowSource: {
                                 controller.showSource(for: task.evidenceSegmentIDs)
@@ -206,19 +206,19 @@ struct TaskAnalysisSectionView: View {
     }
 
     private func contextActionState(for task: CompiledTask) -> TaskRowView.ContextActionState {
-        guard taskContextController.selectedTaskID == task.id else {
+        guard taskPrepController.activeTaskID == task.id else {
             return .ready
         }
 
-        switch taskContextController.panelState {
-        case .idle:
-            return .ready
-        case .loading:
+        switch taskPrepController.viewState.turnState {
+        case .streaming:
             return .loading
-        case .loaded:
-            return .loaded
         case .failed:
             return .failed
+        case .completed:
+            return .loaded
+        case .idle:
+            return .ready
         }
     }
 }
@@ -311,7 +311,7 @@ private struct TaskRowView: View {
         case .loading:
             return "Preparing..."
         case .loaded:
-            return "Refresh context"
+            return "Open workspace"
         case .failed:
             return "Try again"
         }

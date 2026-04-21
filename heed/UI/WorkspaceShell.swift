@@ -5,7 +5,7 @@ import SwiftUI
 struct WorkspaceShell: View {
     @ObservedObject var controller: RecordingController
     @ObservedObject var taskAnalysisController: TaskAnalysisController
-    @ObservedObject var taskContextController: TaskContextController
+    @ObservedObject var taskPrepController: TaskPrepController
     @ObservedObject var apiKeySettingsViewModel: APIKeySettingsViewModel
     @State private var isSidebarVisible = false
     @State private var isAPIKeySettingsPresented = false
@@ -21,6 +21,10 @@ struct WorkspaceShell: View {
 
     private var displayedSystemSegments: [TranscriptSegment] {
         displayedSession?.systemSegments ?? []
+    }
+
+    var isTaskPrepWorkspaceVisible: Bool {
+        taskPrepController.viewState != TaskPrepViewState()
     }
 
     var body: some View {
@@ -41,44 +45,7 @@ struct WorkspaceShell: View {
 
                     ZStack(alignment: .topLeading) {
                         HStack(alignment: .top, spacing: 0) {
-                            ZStack(alignment: .topLeading) {
-                                HeedTheme.ColorToken.canvas
-                                    .ignoresSafeArea()
-
-                                TranscriptCanvasView(
-                                    state: controller.state,
-                                    session: displayedSession,
-                                    micSegments: displayedMicSegments,
-                                    systemSegments: displayedSystemSegments,
-                                    sourceProcessingStates: controller.sourceProcessingStates,
-                                    sourceJumpRequest: taskAnalysisController.sourceJumpRequest,
-                                    highlightedSegmentID: taskAnalysisController.highlightedSegmentID,
-                                    appendixFocusNonce: taskAnalysisController.sectionFocusNonce,
-                                    autoScrollEnabled: $controller.autoScrollEnabled
-                                ) {
-                                    TaskAnalysisSectionView(
-                                        controller: taskAnalysisController,
-                                        taskContextController: taskContextController,
-                                        displayedSession: displayedSession
-                                    )
-                                    .padding(.top, displayedSession?.segments.isEmpty == false ? 16 : 6)
-                                }
-
-                                SidebarToggleButton(isSidebarVisible: $isSidebarVisible)
-                                    .padding(.top, 20)
-                                    .padding(.leading, 20)
-                            }
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-                            if isTaskContextPanelVisible {
-                                TaskContextPanelView(
-                                    presentation: TaskContextPanelPresentation(state: taskContextController.panelState),
-                                    onPrimaryAction: handleTaskContextPrimaryAction,
-                                    onSecondaryAction: handleTaskContextSecondaryAction,
-                                    onClose: taskContextController.reset
-                                )
-                                .transition(.move(edge: .trailing).combined(with: .opacity))
-                            }
+                            mainWorkspace
                         }
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -112,7 +79,7 @@ struct WorkspaceShell: View {
             }
             .onChange(of: displayedSession?.id) {
                 taskAnalysisController.updateDisplayedSession(displayedSession)
-                taskContextController.reset()
+                taskPrepController.reset()
             }
             .onChange(of: displayedSession?.segments.count) {
                 taskAnalysisController.updateDisplayedSession(displayedSession)
@@ -126,6 +93,48 @@ struct WorkspaceShell: View {
                 }
             }
         }
+    }
+
+    private var mainWorkspace: some View {
+        ZStack(alignment: .topLeading) {
+            HeedTheme.ColorToken.canvas
+                .ignoresSafeArea()
+
+            Group {
+                if isTaskPrepWorkspaceVisible {
+                    TaskPrepWorkspaceView(
+                        controller: taskPrepController,
+                        onClose: taskPrepController.reset
+                    )
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
+                } else {
+                    TranscriptCanvasView(
+                        state: controller.state,
+                        session: displayedSession,
+                        micSegments: displayedMicSegments,
+                        systemSegments: displayedSystemSegments,
+                        sourceProcessingStates: controller.sourceProcessingStates,
+                        sourceJumpRequest: taskAnalysisController.sourceJumpRequest,
+                        highlightedSegmentID: taskAnalysisController.highlightedSegmentID,
+                        appendixFocusNonce: taskAnalysisController.sectionFocusNonce,
+                        autoScrollEnabled: $controller.autoScrollEnabled
+                    ) {
+                        TaskAnalysisSectionView(
+                            controller: taskAnalysisController,
+                            taskPrepController: taskPrepController,
+                            displayedSession: displayedSession
+                        )
+                        .padding(.top, displayedSession?.segments.isEmpty == false ? 16 : 6)
+                    }
+                    .transition(.opacity)
+                }
+            }
+
+            SidebarToggleButton(isSidebarVisible: $isSidebarVisible)
+                .padding(.top, 20)
+                .padding(.leading, 20)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     var utilityPrimaryStatus: String? {
@@ -179,7 +188,7 @@ struct WorkspaceShell: View {
                     isEnabled: taskAnalysisController.isCompileActionEnabled,
                     accessibilityIdentifier: "compile-tasks"
                 ) {
-                    taskContextController.reset()
+                    taskPrepController.reset()
                     taskAnalysisController.handleCompileAction()
                 }
             )
@@ -207,30 +216,6 @@ struct WorkspaceShell: View {
         )
 
         return actions
-    }
-
-    private var isTaskContextPanelVisible: Bool {
-        if case .idle = taskContextController.panelState {
-            return false
-        }
-
-        return true
-    }
-
-    private func handleTaskContextPrimaryAction() {
-        guard let taskID = taskContextController.selectedTaskID else {
-            return
-        }
-
-        taskAnalysisController.requestSpawnAgent(for: taskID)
-    }
-
-    private func handleTaskContextSecondaryAction() {
-        guard let displayedSession, let selectedTask = taskContextController.selectedTask else {
-            return
-        }
-
-        taskContextController.prepareTaskContext(for: selectedTask, in: displayedSession)
     }
 }
 

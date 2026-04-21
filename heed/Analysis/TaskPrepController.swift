@@ -11,6 +11,14 @@ final class TaskPrepController: ObservableObject {
     private var activeTurnTask: Task<Void, Never>?
     private var activeTurnID = UUID()
 
+    var activeTaskID: String? {
+        activeTask?.id
+    }
+
+    var activeTaskTitle: String? {
+        activeTask?.title
+    }
+
     init(service: any TaskPrepConversationServicing) {
         self.service = service
     }

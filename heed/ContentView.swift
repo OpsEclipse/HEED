@@ -3,14 +3,14 @@ import SwiftUI
 struct ContentView: View {
     @StateObject private var controller: RecordingController
     @State private var taskAnalysisController: TaskAnalysisController
-    @State private var taskContextController: TaskContextController
+    @State private var taskPrepController: TaskPrepController
     @State private var apiKeySettingsViewModel: APIKeySettingsViewModel
 
     @MainActor
     init(
         controller: RecordingController,
         taskAnalysisController: TaskAnalysisController? = nil,
-        taskContextController: TaskContextController? = nil,
+        taskPrepController: TaskPrepController? = nil,
         apiKeySettingsViewModel: APIKeySettingsViewModel? = nil,
         processInfo: ProcessInfo = .processInfo
     ) {
@@ -18,8 +18,8 @@ struct ContentView: View {
         _taskAnalysisController = State(
             initialValue: taskAnalysisController ?? makeTaskAnalysisController(processInfo: processInfo)
         )
-        _taskContextController = State(
-            initialValue: taskContextController ?? makeTaskContextController(processInfo: processInfo)
+        _taskPrepController = State(
+            initialValue: taskPrepController ?? makeTaskPrepController(processInfo: processInfo)
         )
         _apiKeySettingsViewModel = State(
             initialValue: apiKeySettingsViewModel ?? APIKeySettingsViewModel()
@@ -30,7 +30,7 @@ struct ContentView: View {
         WorkspaceShell(
             controller: controller,
             taskAnalysisController: taskAnalysisController,
-            taskContextController: taskContextController,
+            taskPrepController: taskPrepController,
             apiKeySettingsViewModel: apiKeySettingsViewModel
         )
         .background(HeedTheme.ColorToken.canvas)
@@ -49,16 +49,16 @@ func makeTaskAnalysisController(processInfo: ProcessInfo = .processInfo) -> Task
     return TaskAnalysisController(compiler: compiler)
 }
 
-func makeTaskContextController(processInfo: ProcessInfo = .processInfo) -> TaskContextController {
-    let compiler: any TaskContextCompiling
+func makeTaskPrepController(processInfo: ProcessInfo = .processInfo) -> TaskPrepController {
+    let service: any TaskPrepConversationServicing
 
     if processInfo.arguments.contains("--heed-ui-test") {
-        compiler = TaskContextFixtureCompiler()
+        service = OpenAITaskPrepConversationService()
     } else {
-        compiler = OpenAITaskContextCompiler()
+        service = OpenAITaskPrepConversationService()
     }
 
-    return TaskContextController(compiler: compiler)
+    return TaskPrepController(service: service)
 }
 
 #Preview {
