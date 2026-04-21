@@ -2,7 +2,7 @@
 
 ## Goal
 
-Replace the current static task-context panel with a real task-prep workspace. When the user clicks `Prepare context`, Heed should open a split layout with a streamed GPT-5.4 chat on the left and a live task context panel on the right. The AI should ask follow-up questions, build structured task context during the conversation, and only call `spawn_agent` after the user clearly says it is allowed.
+Replace the current static task-context panel with a real task-prep workspace. When the user clicks `Prepare context`, Heed should open a split layout with a streamed GPT-5.4 chat on the left and a live task context panel on the right. The AI should ask follow-up questions, build structured task context during the conversation, actively suggest when it believes the task is ready, and only call `spawn_agent` after the user clearly says it is allowed.
 
 ## Why This Change
 
@@ -19,7 +19,8 @@ The current `Prepare context` flow behaves like a one-shot summary. That is usef
 7. After every completed assistant turn, Heed updates the structured context panel with the latest stable draft.
 8. The chat stays temporary and in memory only. Switching sessions or preparing context for a new task resets the workspace.
 9. The AI must not auto-spawn. It keeps asking and refining until the user explicitly says it can spawn the agent.
-10. Once the user gives clear approval, the model can call a `spawn_agent` tool and pass the selected task plus the best context it has assembled.
+10. If the AI believes it already has enough context, it should say so directly and ask for permission, for example: `I think we have enough context to proceed. Do you want me to spawn the agent now?`
+11. Once the user gives clear approval, the model can call a `spawn_agent` tool and pass the selected task plus the best context it has assembled.
 
 ## Explicit Non-Goals
 
@@ -77,6 +78,7 @@ Responsibilities:
 - own the chat transcript
 - own the stable structured context draft
 - own in-flight streaming state for the current assistant turn
+- own the assistant's readiness signal so the UI can show when the model thinks the task is ready to hand off
 - enforce the user-approval rule for spawning
 - reset temporary prep state on session change, task change, or explicit close
 
@@ -108,7 +110,9 @@ Add a small service layer that can:
 - send the current conversation turn to OpenAI
 - stream assistant text back into the app
 - decode the structured context update for the completed turn
+- surface readiness suggestions from the model when it thinks enough context has been gathered
 - surface tool calls such as `spawn_agent`
+- surface read-only transcript tool calls
 
 Recommended shape:
 
@@ -133,6 +137,8 @@ Each assistant turn should produce three possible outputs:
 2. One structured context draft for the right-side panel.
 3. An optional `spawn_agent` tool call.
 
+The assistant should also be allowed to say when it believes the context is good enough. That is a suggestion, not an action. The user still decides whether to proceed.
+
 The model input for each turn should include:
 
 - the selected task title and details
@@ -154,6 +160,24 @@ The structured context draft should stay app-owned and explicit. Recommended fie
 
 The `readyToSpawn` field is advisory. The app must still enforce the approval check in code.
 
+## Tools During Prep
+
+The prep conversation should expose two app-owned tools to the model.
+
+1. `get_meeting_transcript`
+   A read-only tool that returns the transcript for the currently selected session. This should let the model pull the full meeting transcript or relevant transcript slices when it needs more detail than the seeded evidence excerpts.
+2. `spawn_agent`
+   The final handoff tool. This remains blocked until the user gives explicit approval.
+
+The transcript tool should be safe by default:
+
+- it only reads from the currently displayed session
+- it does not modify session data
+- it does not bypass the app's existing local-only transcript storage
+- it should support scoped reads when practical, such as `full transcript` or `selected evidence plus nearby lines`
+
+This gives the model a way to look back at the meeting like flipping back a few pages in a notebook instead of trying to remember every earlier sentence from memory alone.
+
 ## Streaming Design
 
 The assistant reply must stream into the left chat UI token by token [small pieces of generated text]. This should feel like live typing instead of waiting for a full finished block.
@@ -174,7 +198,9 @@ The user may say something direct like:
 - `okay you're good to spawn the agent now`
 - `go ahead and spawn it`
 
-Only then may the model call `spawn_agent`.
+Before that happens, the assistant should be encouraged to suggest readiness when appropriate. For example, if it has enough context, it should ask whether the user wants it to spawn the agent now.
+
+Only after explicit user approval may the model call `spawn_agent`.
 
 When the tool call is allowed, Heed should package:
 
@@ -192,12 +218,13 @@ The UI should show that the handoff happened. Do not make the final action feel 
 - If streaming stops halfway, mark that assistant turn as interrupted instead of pretending it completed.
 - Allow retry for the failed turn without resetting the workspace.
 - If the model tries to call `spawn_agent` before approval, reject the call and keep the conversation going.
+- If the model asks for the transcript through `get_meeting_transcript`, return only data from the selected session and keep the tool read-only.
 - Session switches and fresh `Prepare context` actions should cancel stale in-flight work so old replies do not land in the wrong workspace.
 
 ## Testing Focus
 
 - Controller tests for message ordering, streaming assembly, stable-draft updates, reset behavior, and spawn guardrails.
-- Client tests for streamed text events, structured draft parsing, tool-call parsing, and partial-stream failure handling.
+- Client tests for streamed text events, structured draft parsing, readiness suggestions, transcript-tool parsing, tool-call parsing, and partial-stream failure handling.
 - UI tests for `Prepare context` opening the two-pane workspace, streamed reply rendering, right-panel updates, and retry flows.
 - Guardrail tests that prove `spawn_agent` is blocked before approval and allowed after an explicit approval message.
 
