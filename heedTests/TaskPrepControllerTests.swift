@@ -5,15 +5,18 @@ import Testing
 struct TaskPrepControllerTests {
     @Test func firstPrepareContextRequestStartsStreamingAssistantTurn() async throws {
         let service = ControlledTaskPrepConversationService()
+        let task = sampleTask()
+        let session = sampleSession()
         let controller = await MainActor.run {
             TaskPrepController(service: service)
         }
 
         await MainActor.run {
-            controller.start(task: sampleTask(), in: sampleSession())
+            controller.start(task: task, in: session)
         }
 
         #expect(await service.pendingTurnCount() == 1)
+        #expect(await service.lastTurnInput() == TaskPrepTurnInput(task: task, session: session))
 
         let state = await MainActor.run { controller.viewState }
         #expect(state.messages.count == 1)
@@ -25,15 +28,21 @@ struct TaskPrepControllerTests {
 
 private actor ControlledTaskPrepConversationService: TaskPrepConversationServicing {
     private var pendingTurns: [AsyncThrowingStream<TaskPrepConversationEvent, Error>.Continuation] = []
+    private var lastInput: TaskPrepTurnInput?
 
     func beginTurn(input: TaskPrepTurnInput) -> AsyncThrowingStream<TaskPrepConversationEvent, Error> {
-        AsyncThrowingStream { continuation in
+        lastInput = input
+        return AsyncThrowingStream { continuation in
             pendingTurns.append(continuation)
         }
     }
 
     func pendingTurnCount() -> Int {
         pendingTurns.count
+    }
+
+    func lastTurnInput() -> TaskPrepTurnInput? {
+        lastInput
     }
 }
 

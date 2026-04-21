@@ -32,8 +32,15 @@ struct TaskPrepContextDraft: Equatable, Sendable {
     var acceptanceCriteria: [String] = []
     var risks: [String] = []
     var openQuestions: [String] = []
-    var evidence: [TaskContextEvidence] = []
+    var evidence: [TaskPrepEvidence] = []
     var readyToSpawn: Bool = false
+}
+
+struct TaskPrepEvidence: Equatable, Identifiable, Sendable {
+    let id: String
+    let label: String
+    let excerpt: String
+    let segmentIDs: [UUID]
 }
 
 struct TaskPrepTranscriptRequest: Equatable, Sendable {

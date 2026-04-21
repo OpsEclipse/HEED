@@ -148,7 +148,7 @@ Retire these only after the new prep flow is green and all references are remove
 
 ## Outcomes & Retrospective
 
-- 2026-04-20: Planning only so far. No implementation has shipped yet.
+- 2026-04-20: Task 1 is complete; the prep domain model and controller seam now exist, but later prep-chat tasks are still in flight.
 
 ## Task 1: Lock The New Prep Domain Model
 
@@ -208,7 +208,7 @@ struct TaskPrepContextDraft: Equatable, Sendable {
     var acceptanceCriteria: [String] = []
     var risks: [String] = []
     var openQuestions: [String] = []
-    var evidence: [TaskContextEvidence] = []
+    var evidence: [TaskPrepEvidence] = []
     var readyToSpawn: Bool = false
 }
 
