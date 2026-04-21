@@ -2,10 +2,21 @@ import Foundation
 
 protocol TaskPrepConversationServicing: Sendable {
     func beginTurn(input: TaskPrepTurnInput) -> AsyncThrowingStream<TaskPrepConversationEvent, Error>
+    func sendUserMessage(_ message: String) -> AsyncThrowingStream<TaskPrepConversationEvent, Error>
     func submitTranscript(scope: TaskPrepTranscriptRequest, session: TranscriptSession)
 }
 
 extension TaskPrepConversationServicing {
+    func sendUserMessage(_ message: String) -> AsyncThrowingStream<TaskPrepConversationEvent, Error> {
+        AsyncThrowingStream { continuation in
+            continuation.finish(
+                throwing: OpenAITaskPrepConversationServiceError.failedTurn(
+                    "Task prep conversation is not ready for a follow-up message."
+                )
+            )
+        }
+    }
+
     func submitTranscript(scope: TaskPrepTranscriptRequest, session: TranscriptSession) {}
 }
 
@@ -25,6 +36,11 @@ enum OpenAITaskPrepConversationServiceError: LocalizedError, Equatable {
 
 @MainActor
 final class OpenAITaskPrepConversationService: TaskPrepConversationServicing {
+    private struct ConversationContext {
+        let input: TaskPrepTurnInput
+        var lastResponseID: String?
+    }
+
     private struct PendingTranscriptRequest {
         let request: TaskPrepTranscriptRequest
         let metadata: OpenAIStreamFunctionCallMetadata
@@ -35,63 +51,101 @@ final class OpenAITaskPrepConversationService: TaskPrepConversationServicing {
         let output: String
     }
 
-    private struct ActiveTurn {
-        let input: TaskPrepTurnInput
+    private struct ActiveStream {
         let continuation: AsyncThrowingStream<TaskPrepConversationEvent, Error>.Continuation
         var streamTask: Task<Void, Never>?
         var currentStreamID: UUID?
         var pendingTranscriptRequest: PendingTranscriptRequest?
         var queuedTranscriptOutput: QueuedTranscriptOutput?
-        var lastResponseID: String?
+        var terminalEventReceived = false
         var isStreaming = false
     }
 
     private let client: OpenAIResponsesClient
-    private var activeTurn: ActiveTurn?
+    private var conversationContext: ConversationContext?
+    private var activeStream: ActiveStream?
 
     init(client: OpenAIResponsesClient = OpenAIResponsesClient(model: "gpt-5.4")) {
         self.client = client
     }
 
     func beginTurn(input: TaskPrepTurnInput) -> AsyncThrowingStream<TaskPrepConversationEvent, Error> {
-        cancelActiveTurn()
+        cancelActiveStream()
+        conversationContext = ConversationContext(input: input)
+        return makeStreamedTurn(
+            inputItems: Self.initialInputItems(for: input),
+            previousResponseID: nil
+        )
+    }
 
-        return AsyncThrowingStream { continuation in
-            self.activeTurn = ActiveTurn(
-                input: input,
-                continuation: continuation
+    func sendUserMessage(_ message: String) -> AsyncThrowingStream<TaskPrepConversationEvent, Error> {
+        guard activeStream == nil else {
+            return failedStream(
+                OpenAITaskPrepConversationServiceError.failedTurn(
+                    "A task prep turn is already in progress."
+                )
             )
+        }
+
+        guard let conversationContext,
+              let previousResponseID = conversationContext.lastResponseID else {
+            return failedStream(
+                OpenAITaskPrepConversationServiceError.failedTurn(
+                    "Task prep conversation is not ready for a follow-up message."
+                )
+            )
+        }
+
+        return makeStreamedTurn(
+            inputItems: [Self.messagePayload(role: "user", text: message)],
+            previousResponseID: previousResponseID
+        )
+    }
+
+    func submitTranscript(scope: TaskPrepTranscriptRequest, session: TranscriptSession) {
+        guard var stream = activeStream,
+              let conversationContext,
+              let pendingRequest = stream.pendingTranscriptRequest,
+              pendingRequest.request == scope,
+              session.id == conversationContext.input.session.id else {
+            return
+        }
+
+        stream.queuedTranscriptOutput = QueuedTranscriptOutput(
+            callID: pendingRequest.metadata.callID,
+            output: Self.transcriptToolOutput(scope: scope, session: session)
+        )
+        activeStream = stream
+        continueWithQueuedTranscriptOutputIfPossible()
+    }
+
+    private func makeStreamedTurn(
+        inputItems: [[String: Any]],
+        previousResponseID: String?
+    ) -> AsyncThrowingStream<TaskPrepConversationEvent, Error> {
+        AsyncThrowingStream { continuation in
+            self.activeStream = ActiveStream(continuation: continuation)
             self.startStreaming(
-                inputItems: Self.initialInputItems(for: input),
-                previousResponseID: nil
+                inputItems: inputItems,
+                previousResponseID: previousResponseID
             )
 
             continuation.onTermination = { [weak self] _ in
                 Task { @MainActor in
-                    self?.cancelActiveTurn()
+                    self?.cancelActiveStream()
                 }
             }
         }
     }
 
-    func submitTranscript(scope: TaskPrepTranscriptRequest, session: TranscriptSession) {
-        guard var turn = activeTurn,
-              let pendingRequest = turn.pendingTranscriptRequest,
-              pendingRequest.request == scope,
-              session.id == turn.input.session.id else {
-            return
+    private func failedStream(_ error: Error) -> AsyncThrowingStream<TaskPrepConversationEvent, Error> {
+        AsyncThrowingStream { continuation in
+            continuation.finish(throwing: error)
         }
-
-        turn.queuedTranscriptOutput = QueuedTranscriptOutput(
-            callID: pendingRequest.metadata.callID,
-            output: Self.transcriptToolOutput(scope: scope, session: session)
-        )
-        activeTurn = turn
-        continueWithQueuedTranscriptOutputIfPossible()
     }
 
     private func startStreaming(inputItems: [[String: Any]], previousResponseID: String?) {
-        guard var turn = activeTurn else {
+        guard var streamState = activeStream else {
             return
         }
 
@@ -103,9 +157,10 @@ final class OpenAITaskPrepConversationService: TaskPrepConversationServicing {
                 previousResponseID: previousResponseID
             )
 
-            turn.isStreaming = true
-            turn.currentStreamID = streamID
-            turn.streamTask = Task { [weak self] in
+            streamState.isStreaming = true
+            streamState.currentStreamID = streamID
+            streamState.terminalEventReceived = false
+            streamState.streamTask = Task { [weak self] in
                 do {
                     for try await event in stream {
                         await MainActor.run {
@@ -114,87 +169,91 @@ final class OpenAITaskPrepConversationService: TaskPrepConversationServicing {
                     }
 
                     await MainActor.run {
-                        self?.markStreamIdle(streamID: streamID)
+                        self?.handleStreamFinished(streamID: streamID)
                     }
                 } catch {
                     await MainActor.run {
-                        self?.finishActiveTurn(throwing: error)
+                        self?.finishActiveStream(throwing: error)
                     }
                 }
             }
-            activeTurn = turn
+            activeStream = streamState
         } catch {
-            finishActiveTurn(throwing: error)
+            finishActiveStream(throwing: error)
         }
     }
 
     private func handle(_ event: OpenAIStreamEvent, fromStreamID streamID: UUID) {
-        guard var turn = activeTurn, turn.currentStreamID == streamID else {
+        guard var streamState = activeStream, streamState.currentStreamID == streamID else {
             return
         }
 
         switch event {
         case let .textDelta(delta):
-            turn.continuation.yield(.assistantTextDelta(delta))
-            activeTurn = turn
+            streamState.continuation.yield(.assistantTextDelta(delta))
+            activeStream = streamState
         case .functionArgumentsDelta:
-            activeTurn = turn
+            activeStream = streamState
         case let .functionCallCompleted(metadata, name, arguments):
             do {
                 if let toolEvent = try decodeToolEvent(name: name, arguments: arguments) {
                     switch toolEvent {
                     case let .transcriptToolRequest(request):
-                        turn.pendingTranscriptRequest = PendingTranscriptRequest(
+                        streamState.pendingTranscriptRequest = PendingTranscriptRequest(
                             request: request,
                             metadata: metadata
                         )
-                        turn.continuation.yield(toolEvent)
+                        streamState.continuation.yield(toolEvent)
                     case .contextDraft, .spawnAgentRequest:
-                        turn.continuation.yield(toolEvent)
+                        streamState.continuation.yield(toolEvent)
                     default:
                         break
                     }
                 }
 
-                activeTurn = turn
+                activeStream = streamState
             } catch {
-                finishActiveTurn(throwing: error)
+                finishActiveStream(throwing: error)
             }
         case let .completed(responseID):
-            turn.isStreaming = false
-            turn.currentStreamID = nil
-            turn.lastResponseID = responseID
-            activeTurn = turn
+            streamState.isStreaming = false
+            streamState.currentStreamID = nil
+            streamState.terminalEventReceived = true
+            activeStream = streamState
 
-            if turn.queuedTranscriptOutput != nil {
+            if let responseID {
+                conversationContext?.lastResponseID = responseID
+            }
+
+            if streamState.queuedTranscriptOutput != nil {
                 continueWithQueuedTranscriptOutputIfPossible()
                 return
             }
 
-            if turn.pendingTranscriptRequest != nil {
+            if streamState.pendingTranscriptRequest != nil {
                 return
             }
 
-            turn.continuation.yield(.completed)
-            turn.continuation.finish()
-            activeTurn = nil
+            finishActiveStreamSuccessfully()
         case let .failed(message):
-            finishActiveTurn(throwing: OpenAITaskPrepConversationServiceError.failedTurn(message))
+            streamState.terminalEventReceived = true
+            activeStream = streamState
+            finishActiveStream(throwing: OpenAITaskPrepConversationServiceError.failedTurn(message))
         }
     }
 
     private func continueWithQueuedTranscriptOutputIfPossible() {
-        guard var turn = activeTurn,
-              !turn.isStreaming,
-              let queuedTranscriptOutput = turn.queuedTranscriptOutput,
-              let previousResponseID = turn.lastResponseID else {
+        guard var streamState = activeStream,
+              let previousResponseID = conversationContext?.lastResponseID,
+              !streamState.isStreaming,
+              let queuedTranscriptOutput = streamState.queuedTranscriptOutput else {
             return
         }
 
-        turn.queuedTranscriptOutput = nil
-        turn.pendingTranscriptRequest = nil
-        turn.lastResponseID = nil
-        activeTurn = turn
+        streamState.queuedTranscriptOutput = nil
+        streamState.pendingTranscriptRequest = nil
+        streamState.terminalEventReceived = false
+        activeStream = streamState
 
         startStreaming(
             inputItems: [
@@ -207,34 +266,50 @@ final class OpenAITaskPrepConversationService: TaskPrepConversationServicing {
         )
     }
 
-    private func markStreamIdle(streamID: UUID) {
-        guard var turn = activeTurn, turn.currentStreamID == streamID else {
+    private func handleStreamFinished(streamID: UUID) {
+        guard let streamState = activeStream, streamState.currentStreamID == streamID else {
             return
         }
 
-        turn.isStreaming = false
-        turn.currentStreamID = nil
-        activeTurn = turn
+        if streamState.terminalEventReceived {
+            return
+        }
+
+        finishActiveStream(
+            throwing: OpenAITaskPrepConversationServiceError.failedTurn(
+                "The streamed response ended before the turn completed."
+            )
+        )
     }
 
-    private func finishActiveTurn(throwing error: Error) {
-        guard let turn = activeTurn else {
+    private func finishActiveStreamSuccessfully() {
+        guard let streamState = activeStream else {
             return
         }
 
-        turn.streamTask?.cancel()
-        turn.continuation.finish(throwing: error)
-        activeTurn = nil
+        streamState.continuation.yield(.completed)
+        streamState.continuation.finish()
+        activeStream = nil
     }
 
-    private func cancelActiveTurn() {
-        guard let turn = activeTurn else {
+    private func finishActiveStream(throwing error: Error) {
+        guard let streamState = activeStream else {
             return
         }
 
-        turn.streamTask?.cancel()
-        turn.continuation.finish()
-        activeTurn = nil
+        streamState.streamTask?.cancel()
+        streamState.continuation.finish(throwing: error)
+        activeStream = nil
+    }
+
+    private func cancelActiveStream() {
+        guard let streamState = activeStream else {
+            return
+        }
+
+        streamState.streamTask?.cancel()
+        streamState.continuation.finish()
+        activeStream = nil
     }
 
     private static let systemPrompt = """

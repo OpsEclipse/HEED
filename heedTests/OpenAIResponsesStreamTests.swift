@@ -196,6 +196,64 @@ struct OpenAIResponsesStreamTests {
         #expect(output.contains("The side panel should stay visible."))
     }
 
+    @Test func taskPrepServiceContinuesConversationWithUserFollowUp() async throws {
+        let transport = ScriptedStreamingTransport(
+            payloads: [
+                [
+                    "event: response.output_text.delta",
+                    "data: {\"delta\":\"What should we focus on next?\"}",
+                    "",
+                    "event: response.completed",
+                    #"data: {"response":{"id":"resp_initial"}}"#,
+                    ""
+                ].joined(separator: "\n"),
+                [
+                    "event: response.output_text.delta",
+                    "data: {\"delta\":\"Focus on the side panel behavior first.\"}",
+                    "",
+                    "event: response.completed",
+                    #"data: {"response":{"id":"resp_followup"}}"#,
+                    ""
+                ].joined(separator: "\n")
+            ]
+        )
+        let service = OpenAITaskPrepConversationService(
+            client: OpenAIResponsesClient(
+                model: "gpt-5.4",
+                apiKeyProvider: { "sk-test" },
+                transport: transport
+            )
+        )
+
+        _ = try await collect(
+            from: service.beginTurn(input: TaskPrepTurnInput(task: sampleTask(), session: sampleSession()))
+        )
+
+        let followUpEvents = try await collect(
+            from: service.sendUserMessage("What did the meeting suggest?")
+        )
+
+        #expect(followUpEvents == [
+            .assistantTextDelta("Focus on the side panel behavior first."),
+            .completed
+        ])
+
+        let requests = transport.recordedJSONBodies()
+        #expect(requests.count == 2)
+
+        let followupRequest = try #require(requests.last)
+        #expect(followupRequest["previous_response_id"] as? String == "resp_initial")
+
+        let followupInput = try #require(followupRequest["input"] as? [[String: Any]])
+        let userMessage = try #require(followupInput.first)
+        #expect(userMessage["role"] as? String == "user")
+
+        let content = try #require(userMessage["content"] as? [[String: Any]])
+        let textItem = try #require(content.first)
+        #expect(textItem["type"] as? String == "input_text")
+        #expect(textItem["text"] as? String == "What did the meeting suggest?")
+    }
+
     @Test func taskPrepServiceSurfacesResponseFailed() async {
         let transport = ScriptedStreamingTransport(
             payloads: [
@@ -221,6 +279,36 @@ struct OpenAIResponsesStreamTests {
             Issue.record("Expected response.failed to surface as a service error")
         } catch let error as OpenAITaskPrepConversationServiceError {
             #expect(error == .failedTurn("OpenAI stopped the turn"))
+        } catch {
+            Issue.record("Unexpected error: \(error)")
+        }
+    }
+
+    @Test func taskPrepServiceFailsInterruptedStreamWithoutTerminalEvent() async {
+        let transport = ScriptedStreamingTransport(
+            payloads: [
+                [
+                    "event: response.output_text.delta",
+                    "data: {\"delta\":\"Partial answer\"}",
+                    ""
+                ].joined(separator: "\n")
+            ]
+        )
+        let service = OpenAITaskPrepConversationService(
+            client: OpenAIResponsesClient(
+                model: "gpt-5.4",
+                apiKeyProvider: { "sk-test" },
+                transport: transport
+            )
+        )
+
+        do {
+            _ = try await collect(
+                from: service.beginTurn(input: TaskPrepTurnInput(task: sampleTask(), session: sampleSession()))
+            )
+            Issue.record("Expected interrupted stream to surface as a service error")
+        } catch let error as OpenAITaskPrepConversationServiceError {
+            #expect(error == .failedTurn("The streamed response ended before the turn completed."))
         } catch {
             Issue.record("Unexpected error: \(error)")
         }
