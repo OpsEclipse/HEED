@@ -3,6 +3,15 @@ import Security
 
 protocol OpenAIResponsesTransport: Sendable {
     func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse)
+    func stream(_ request: URLRequest) -> AsyncThrowingStream<String, Error>
+}
+
+extension OpenAIResponsesTransport {
+    func stream(_ request: URLRequest) -> AsyncThrowingStream<String, Error> {
+        AsyncThrowingStream { continuation in
+            continuation.finish(throwing: OpenAIResponsesError.streamingUnsupported)
+        }
+    }
 }
 
 struct URLSessionOpenAIResponsesTransport: OpenAIResponsesTransport {
@@ -13,6 +22,45 @@ struct URLSessionOpenAIResponsesTransport: OpenAIResponsesTransport {
         }
 
         return (data, httpResponse)
+    }
+
+    func stream(_ request: URLRequest) -> AsyncThrowingStream<String, Error> {
+        AsyncThrowingStream { continuation in
+            let task = Task {
+                do {
+                    let (bytes, response) = try await URLSession.shared.bytes(for: request)
+                    guard let httpResponse = response as? HTTPURLResponse else {
+                        throw OpenAIResponsesError.invalidHTTPResponse
+                    }
+
+                    guard (200...299).contains(httpResponse.statusCode) else {
+                        var responseData = Data()
+                        for try await byte in bytes {
+                            responseData.append(byte)
+                        }
+
+                        throw OpenAIResponsesError.httpFailure(
+                            statusCode: httpResponse.statusCode,
+                            message: openAIErrorMessage(from: responseData) ?? HTTPURLResponse.localizedString(forStatusCode: httpResponse.statusCode)
+                        )
+                    }
+
+                    for try await line in bytes.lines {
+                        continuation.yield(line)
+                    }
+
+                    continuation.finish()
+                } catch is CancellationError {
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+
+            continuation.onTermination = { _ in
+                task.cancel()
+            }
+        }
     }
 }
 
@@ -48,10 +96,17 @@ struct OpenAIResponsesClient: Sendable {
 
         let request = try makeRequest(
             apiKey: apiKey,
-            systemPrompt: systemPrompt,
-            userPrompt: userPrompt,
-            schemaName: schemaName,
-            schema: schema,
+            input: [
+                Self.messagePayload(role: "system", text: systemPrompt),
+                Self.messagePayload(role: "user", text: userPrompt)
+            ],
+            textFormat: [
+                "type": "json_schema",
+                "name": schemaName,
+                "strict": true,
+                "schema": schema
+            ],
+            tools: [],
             maxOutputTokens: maxOutputTokens
         )
 
@@ -59,7 +114,7 @@ struct OpenAIResponsesClient: Sendable {
         guard (200...299).contains(response.statusCode) else {
             throw OpenAIResponsesError.httpFailure(
                 statusCode: response.statusCode,
-                message: Self.errorMessage(from: data) ?? HTTPURLResponse.localizedString(forStatusCode: response.statusCode)
+                message: openAIErrorMessage(from: data) ?? HTTPURLResponse.localizedString(forStatusCode: response.statusCode)
             )
         }
 
@@ -79,42 +134,115 @@ struct OpenAIResponsesClient: Sendable {
         }
     }
 
-    private func makeRequest(
-        apiKey: String,
+    func streamConversation(
         systemPrompt: String,
         userPrompt: String,
-        schemaName: String,
-        schema: [String: Any],
-        maxOutputTokens: Int
-    ) throws -> URLRequest {
-        let body: [String: Any] = [
-            "model": model,
-            "input": [
+        tools: [[String: Any]],
+        maxOutputTokens: Int = 3200
+    ) throws -> AsyncThrowingStream<OpenAIStreamEvent, Error> {
+        guard let apiKey = try apiKeyProvider()?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !apiKey.isEmpty else {
+            throw OpenAIResponsesError.missingAPIKey
+        }
+
+        let request = try makeRequest(
+            apiKey: apiKey,
+            input: [
                 Self.messagePayload(role: "system", text: systemPrompt),
                 Self.messagePayload(role: "user", text: userPrompt)
             ],
-            "text": [
-                "format": [
-                    "type": "json_schema",
-                    "name": schemaName,
-                    "strict": true,
-                    "schema": schema
-                ]
-            ],
-            "max_output_tokens": maxOutputTokens
+            textFormat: nil,
+            tools: tools,
+            maxOutputTokens: maxOutputTokens,
+            stream: true
+        )
+
+        let lineStream = transport.stream(request)
+        let parser = OpenAIResponsesStreamParser()
+
+        return AsyncThrowingStream { continuation in
+            let task = Task {
+                do {
+                    var eventLines: [String] = []
+
+                    for try await line in lineStream {
+                        eventLines.append(line)
+
+                        if line.isEmpty {
+                            try yieldParsedEvents(from: &eventLines, parser: parser, continuation: continuation)
+                        }
+                    }
+
+                    try yieldParsedEvents(from: &eventLines, parser: parser, continuation: continuation)
+                    continuation.finish()
+                } catch is CancellationError {
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+
+            continuation.onTermination = { _ in
+                task.cancel()
+            }
+        }
+    }
+
+    private func makeRequest(
+        apiKey: String,
+        input: [[String: Any]],
+        textFormat: [String: Any]?,
+        tools: [[String: Any]],
+        maxOutputTokens: Int?,
+        stream: Bool = false
+    ) throws -> URLRequest {
+        var request = URLRequest(url: URL(string: "https://api.openai.com/v1/responses")!)
+        request.httpMethod = "POST"
+        request.httpBody = try makeJSONRequestBody(
+            input: input,
+            textFormat: textFormat,
+            tools: tools,
+            maxOutputTokens: maxOutputTokens,
+            stream: stream
+        )
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue(UUID().uuidString, forHTTPHeaderField: "X-Client-Request-Id")
+        return request
+    }
+
+    func makeJSONRequestBody(
+        input: [[String: Any]],
+        textFormat: [String: Any]?,
+        tools: [[String: Any]],
+        maxOutputTokens: Int?,
+        stream: Bool
+    ) throws -> Data {
+        var body: [String: Any] = [
+            "model": model,
+            "input": input,
+            "stream": stream
         ]
+
+        if let textFormat {
+            body["text"] = [
+                "format": textFormat
+            ]
+        }
+
+        if !tools.isEmpty {
+            body["tools"] = tools
+        }
+
+        if let maxOutputTokens {
+            body["max_output_tokens"] = maxOutputTokens
+        }
 
         guard JSONSerialization.isValidJSONObject(body) else {
             throw OpenAIResponsesError.invalidRequestBody
         }
 
-        var request = URLRequest(url: URL(string: "https://api.openai.com/v1/responses")!)
-        request.httpMethod = "POST"
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        request.setValue(UUID().uuidString, forHTTPHeaderField: "X-Client-Request-Id")
-        return request
+        return try JSONSerialization.data(withJSONObject: body)
     }
 
     private static func messagePayload(role: String, text: String) -> [String: Any] {
@@ -129,12 +257,21 @@ struct OpenAIResponsesClient: Sendable {
         ]
     }
 
-    private static func errorMessage(from data: Data) -> String? {
-        guard let envelope = try? JSONDecoder().decode(OpenAIErrorEnvelope.self, from: data) else {
-            return nil
+    private func yieldParsedEvents(
+        from eventLines: inout [String],
+        parser: OpenAIResponsesStreamParser,
+        continuation: AsyncThrowingStream<OpenAIStreamEvent, Error>.Continuation
+    ) throws {
+        guard !eventLines.isEmpty else {
+            return
         }
 
-        return envelope.error.message
+        let payload = eventLines.joined(separator: "\n")
+        eventLines.removeAll(keepingCapacity: true)
+
+        for event in try parser.parse(payload) {
+            continuation.yield(event)
+        }
     }
 }
 
@@ -142,6 +279,7 @@ enum OpenAIResponsesError: LocalizedError, Equatable {
     case missingAPIKey
     case invalidRequestBody
     case invalidHTTPResponse
+    case streamingUnsupported
     case httpFailure(statusCode: Int, message: String)
     case missingOutputText
     case invalidStructuredOutput
@@ -155,6 +293,8 @@ enum OpenAIResponsesError: LocalizedError, Equatable {
             return "Could not build the OpenAI request."
         case .invalidHTTPResponse:
             return "OpenAI returned an invalid response."
+        case .streamingUnsupported:
+            return "OpenAI streaming is not available for this transport."
         case let .httpFailure(_, message):
             return "OpenAI request failed: \(message)"
         case .missingOutputText:
@@ -198,6 +338,14 @@ private struct OpenAIErrorEnvelope: Decodable {
     struct APIError: Decodable {
         let message: String
     }
+}
+
+private func openAIErrorMessage(from data: Data) -> String? {
+    guard let envelope = try? JSONDecoder().decode(OpenAIErrorEnvelope.self, from: data) else {
+        return nil
+    }
+
+    return envelope.error.message
 }
 
 private func loadStoredOpenAIAPIKey() throws -> String? {
