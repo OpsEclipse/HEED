@@ -1,10 +1,17 @@
 import Foundation
 
+struct OpenAIStreamFunctionCallMetadata: Equatable, Sendable {
+    let callID: String
+    let itemID: String?
+    let outputIndex: Int?
+    let sequenceNumber: Int?
+}
+
 enum OpenAIStreamEvent: Equatable, Sendable {
     case textDelta(String)
-    case functionArgumentsDelta(String)
-    case functionCallCompleted(name: String, arguments: String)
-    case completed
+    case functionArgumentsDelta(OpenAIStreamFunctionCallMetadata, String)
+    case functionCallCompleted(OpenAIStreamFunctionCallMetadata, name: String, arguments: String)
+    case completed(responseID: String?)
     case failed(String)
 }
 
@@ -76,67 +83,137 @@ struct OpenAIResponsesStreamParser {
         case "response.output_text.delta":
             return .textDelta(try decodeStringField(named: "delta", in: payload, event: name))
         case "response.function_call_arguments.delta":
-            return .functionArgumentsDelta(try decodeStringField(named: "delta", in: payload, event: name))
+            let object = try requiredJSONObject(from: payload, event: name)
+            return .functionArgumentsDelta(
+                try decodeFunctionCallMetadata(from: object, event: name),
+                try decodeStringField(named: "delta", from: object, event: name)
+            )
         case "response.function_call_arguments.done":
+            let object = try requiredJSONObject(from: payload, event: name)
             return .functionCallCompleted(
-                name: try decodeStringField(named: "name", in: payload, event: name),
-                arguments: try decodeStringField(named: "arguments", in: payload, event: name)
+                try decodeFunctionCallMetadata(from: object, event: name),
+                name: try decodeStringField(named: "name", from: object, event: name),
+                arguments: try decodeStringField(named: "arguments", from: object, event: name)
             )
         case "response.completed":
-            return .completed
-        case "error":
-            return .failed(try decodeErrorMessage(in: payload))
+            let object = try jsonObject(from: payload, event: name)
+            return .completed(responseID: decodeResponseID(from: object))
+        case "response.failed", "error":
+            return .failed(try decodeFailureMessage(in: payload, event: name))
         default:
             return nil
         }
     }
 
+    private func decodeFunctionCallMetadata(
+        from object: [String: Any],
+        event: String
+    ) throws -> OpenAIStreamFunctionCallMetadata {
+        OpenAIStreamFunctionCallMetadata(
+            callID: try decodeStringField(named: "call_id", from: object, event: event),
+            itemID: object["item_id"] as? String,
+            outputIndex: decodeIntField(named: "output_index", from: object),
+            sequenceNumber: decodeIntField(named: "sequence_number", from: object)
+                ?? decodeIntField(named: "content_index", from: object)
+        )
+    }
+
     private func decodeStringField(named field: String, in payload: String, event: String) throws -> String {
-        guard let object = try jsonObject(from: payload),
-              let value = object[field] as? String else {
-            throw missingFieldError(for: event, field: field, payload: payload)
+        let object = try requiredJSONObject(from: payload, event: event)
+        return try decodeStringField(named: field, from: object, event: event)
+    }
+
+    private func decodeStringField(
+        named field: String,
+        from object: [String: Any],
+        event: String
+    ) throws -> String {
+        guard let value = object[field] as? String else {
+            throw OpenAIResponsesStreamParseError.missingRequiredField(event: event, field: field)
         }
 
         return value
     }
 
-    private func decodeErrorMessage(in payload: String) throws -> String {
-        guard let object = try jsonObject(from: payload) else {
-            throw OpenAIResponsesStreamParseError.invalidEventData(event: "error")
+    private func decodeIntField(named field: String, from object: [String: Any]) -> Int? {
+        if let value = object[field] as? Int {
+            return value
         }
 
-        if let message = object["message"] as? String, !message.isEmpty {
-            return message
+        if let value = object[field] as? NSNumber {
+            return value.intValue
         }
 
-        if let nestedError = object["error"] as? [String: Any],
-           let message = nestedError["message"] as? String,
-           !message.isEmpty {
-            return message
-        }
-
-        throw OpenAIResponsesStreamParseError.missingRequiredField(event: "error", field: "message")
+        return nil
     }
 
-    private func jsonObject(from payload: String) throws -> [String: Any]? {
-        guard !payload.isEmpty, payload != "[DONE]" else {
+    private func decodeFailureMessage(in payload: String, event: String) throws -> String {
+        let object = try requiredJSONObject(from: payload, event: event)
+
+        if let message = nestedString(in: object, path: ["message"]) ?? nestedString(in: object, path: ["error", "message"]) {
+            return message
+        }
+
+        if let message = nestedString(in: object, path: ["response", "error", "message"])
+            ?? nestedString(in: object, path: ["response", "status_details", "error", "message"])
+            ?? nestedString(in: object, path: ["response", "status_details", "message"]) {
+            return message
+        }
+
+        throw OpenAIResponsesStreamParseError.missingRequiredField(event: event, field: "message")
+    }
+
+    private func decodeResponseID(from object: [String: Any]?) -> String? {
+        guard let object else {
             return nil
         }
 
-        guard let data = payload.data(using: .utf8),
-              let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            throw OpenAIResponsesStreamParseError.invalidEventData(event: "unknown")
+        return nestedString(in: object, path: ["response", "id"]) ?? nestedString(in: object, path: ["response_id"])
+    }
+
+    private func requiredJSONObject(from payload: String, event: String) throws -> [String: Any] {
+        guard let object = try jsonObject(from: payload, event: event) else {
+            throw OpenAIResponsesStreamParseError.invalidEventData(event: event)
         }
 
         return object
     }
 
-    private func missingFieldError(for event: String, field: String, payload: String) -> OpenAIResponsesStreamParseError {
-        if payload.isEmpty || payload == "[DONE]" {
-            return .missingRequiredField(event: event, field: field)
+    private func jsonObject(from payload: String, event: String) throws -> [String: Any]? {
+        guard !payload.isEmpty, payload != "[DONE]" else {
+            return nil
         }
 
-        return .missingRequiredField(event: event, field: field)
+        guard let data = payload.data(using: .utf8) else {
+            throw OpenAIResponsesStreamParseError.invalidEventData(event: event)
+        }
+
+        do {
+            guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                throw OpenAIResponsesStreamParseError.invalidEventData(event: event)
+            }
+
+            return object
+        } catch let error as OpenAIResponsesStreamParseError {
+            throw error
+        } catch {
+            throw OpenAIResponsesStreamParseError.invalidEventData(event: event)
+        }
+    }
+
+    private func nestedString(in object: [String: Any], path: [String]) -> String? {
+        var current: Any = object
+
+        for key in path {
+            guard let dictionary = current as? [String: Any],
+                  let next = dictionary[key] else {
+                return nil
+            }
+
+            current = next
+        }
+
+        return current as? String
     }
 
     private func fieldValue(in line: String, named field: String) -> String? {

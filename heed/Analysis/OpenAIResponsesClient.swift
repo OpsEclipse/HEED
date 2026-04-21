@@ -140,6 +140,22 @@ struct OpenAIResponsesClient: Sendable {
         tools: [[String: Any]],
         maxOutputTokens: Int = 3200
     ) throws -> AsyncThrowingStream<OpenAIStreamEvent, Error> {
+        try streamConversation(
+            input: [
+                Self.messagePayload(role: "system", text: systemPrompt),
+                Self.messagePayload(role: "user", text: userPrompt)
+            ],
+            tools: tools,
+            maxOutputTokens: maxOutputTokens
+        )
+    }
+
+    func streamConversation(
+        input: [[String: Any]],
+        tools: [[String: Any]],
+        previousResponseID: String? = nil,
+        maxOutputTokens: Int = 3200
+    ) throws -> AsyncThrowingStream<OpenAIStreamEvent, Error> {
         guard let apiKey = try apiKeyProvider()?.trimmingCharacters(in: .whitespacesAndNewlines),
               !apiKey.isEmpty else {
             throw OpenAIResponsesError.missingAPIKey
@@ -147,12 +163,10 @@ struct OpenAIResponsesClient: Sendable {
 
         let request = try makeRequest(
             apiKey: apiKey,
-            input: [
-                Self.messagePayload(role: "system", text: systemPrompt),
-                Self.messagePayload(role: "user", text: userPrompt)
-            ],
+            input: input,
             textFormat: nil,
             tools: tools,
+            previousResponseID: previousResponseID,
             maxOutputTokens: maxOutputTokens,
             stream: true
         )
@@ -193,6 +207,7 @@ struct OpenAIResponsesClient: Sendable {
         input: [[String: Any]],
         textFormat: [String: Any]?,
         tools: [[String: Any]],
+        previousResponseID: String? = nil,
         maxOutputTokens: Int?,
         stream: Bool = false
     ) throws -> URLRequest {
@@ -202,6 +217,7 @@ struct OpenAIResponsesClient: Sendable {
             input: input,
             textFormat: textFormat,
             tools: tools,
+            previousResponseID: previousResponseID,
             maxOutputTokens: maxOutputTokens,
             stream: stream
         )
@@ -215,6 +231,7 @@ struct OpenAIResponsesClient: Sendable {
         input: [[String: Any]],
         textFormat: [String: Any]?,
         tools: [[String: Any]],
+        previousResponseID: String? = nil,
         maxOutputTokens: Int?,
         stream: Bool
     ) throws -> Data {
@@ -232,6 +249,10 @@ struct OpenAIResponsesClient: Sendable {
 
         if !tools.isEmpty {
             body["tools"] = tools
+        }
+
+        if let previousResponseID {
+            body["previous_response_id"] = previousResponseID
         }
 
         if let maxOutputTokens {
