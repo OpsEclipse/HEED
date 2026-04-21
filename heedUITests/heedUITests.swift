@@ -16,9 +16,7 @@ final class heedUITests: XCTestCase {
 
     @MainActor
     func testRecordingShellLoadsInUITestMode() throws {
-        let app = XCUIApplication()
-        app.launchArguments.append("--heed-ui-test")
-        app.launch()
+        let app = launchAppInUITestMode()
         defer { forceQuitHeed() }
 
         XCTAssertTrue(app.buttons["record-button"].waitForExistence(timeout: uiTimeout))
@@ -46,10 +44,7 @@ final class heedUITests: XCTestCase {
 
     @MainActor
     func testCompileTasksFlowAppearsInlineAfterRecordingStops() throws {
-        let app = XCUIApplication()
-        app.launchArguments.append("--heed-ui-test")
-        app.launchArguments.append("--heed-ui-test-task-analysis=success")
-        app.launch()
+        let app = launchAppInUITestMode(taskAnalysisMode: "success")
         defer { forceQuitHeed() }
 
         XCTAssertTrue(app.buttons["record-button"].waitForExistence(timeout: uiTimeout))
@@ -80,19 +75,40 @@ final class heedUITests: XCTestCase {
         XCTAssertEqual(prepareContextButton.label, "Prepare context")
         prepareContextButton.click()
 
-        let taskContextPanel = app.buttons["task-context-primary"]
-        XCTAssertTrue(taskContextPanel.waitForExistence(timeout: uiTimeout))
-        XCTAssertEqual(taskContextPanel.label, "Spawn agent")
-        XCTAssertTrue(app.buttons["task-context-close"].exists)
-        XCTAssertTrue(app.staticTexts["Turn this transcript task into a concrete implementation plan."].waitForExistence(timeout: uiTimeout))
-
-        taskContextPanel.click()
-        XCTAssertTrue(app.buttons["task-context-primary"].waitForExistence(timeout: uiTimeout))
-        XCTAssertEqual(app.buttons["task-context-primary"].label, "Spawn agent")
+        XCTAssertTrue(app.otherElements["task-prep-workspace"].waitForExistence(timeout: uiTimeout))
+        XCTAssertTrue(app.scrollViews["task-prep-chat-thread"].waitForExistence(timeout: uiTimeout))
+        XCTAssertTrue(
+            app.staticTexts["I think we have enough context to proceed. Do you want me to spawn the agent now?"]
+                .waitForExistence(timeout: uiTimeout)
+        )
+        XCTAssertTrue(app.otherElements["task-prep-context-panel"].waitForExistence(timeout: uiTimeout))
+        XCTAssertTrue(app.buttons["task-prep-approve-spawn"].waitForExistence(timeout: uiTimeout))
+        XCTAssertFalse(app.buttons["task-context-primary"].exists)
+        XCTAssertFalse(app.buttons["task-context-close"].exists)
+        XCTAssertTrue(app.staticTexts["Prepare the transcript review follow-up."].waitForExistence(timeout: uiTimeout))
 
         let showSourceButton = app.buttons["task-row-source-verify-audio-paths"]
         XCTAssertTrue(showSourceButton.exists)
         showSourceButton.click()
+    }
+
+    @MainActor
+    private func launchAppInUITestMode(taskAnalysisMode: String? = nil) -> XCUIApplication {
+        forceQuitHeed()
+
+        let app = XCUIApplication()
+        app.launchArguments = [
+            "--heed-ui-test",
+            "-ApplePersistenceIgnoreState",
+            "YES"
+        ]
+
+        if let taskAnalysisMode {
+            app.launchArguments.append("--heed-ui-test-task-analysis=\(taskAnalysisMode)")
+        }
+
+        app.launch()
+        return app
     }
 
     @MainActor

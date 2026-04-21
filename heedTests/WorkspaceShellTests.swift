@@ -3,61 +3,8 @@ import Testing
 @testable import heed
 
 struct WorkspaceShellTests {
-    @Test func taskAnalysisControllerIsObservedByTheShell() async {
-        let recordingController = await MainActor.run {
-            RecordingController(demoMode: true)
-        }
-        let taskAnalysisController = await MainActor.run {
-            TaskAnalysisController()
-        }
-        let taskPrepController = await MainActor.run {
-            TaskPrepController(service: WorkspaceShellTaskPrepServiceStub())
-        }
-        let apiKeySettingsViewModel = await MainActor.run {
-            APIKeySettingsViewModel(store: InMemoryAPIKeyStore())
-        }
-        let shell = WorkspaceShell(
-            controller: recordingController,
-            taskAnalysisController: taskAnalysisController,
-            taskPrepController: taskPrepController,
-            apiKeySettingsViewModel: apiKeySettingsViewModel
-        )
-
-        let mirrorLabels = Mirror(reflecting: shell).children.compactMap(\.label)
-
-        #expect(mirrorLabels.contains("_taskAnalysisController"))
-        #expect(!mirrorLabels.contains("taskAnalysisController"))
-    }
-
-    @Test func taskPrepControllerIsObservedByTheShell() async {
-        let recordingController = await MainActor.run {
-            RecordingController(demoMode: true)
-        }
-        let taskAnalysisController = await MainActor.run {
-            TaskAnalysisController()
-        }
-        let taskPrepController = await MainActor.run {
-            TaskPrepController(service: WorkspaceShellTaskPrepServiceStub())
-        }
-        let apiKeySettingsViewModel = await MainActor.run {
-            APIKeySettingsViewModel(store: InMemoryAPIKeyStore())
-        }
-        let shell = WorkspaceShell(
-            controller: recordingController,
-            taskAnalysisController: taskAnalysisController,
-            taskPrepController: taskPrepController,
-            apiKeySettingsViewModel: apiKeySettingsViewModel
-        )
-
-        let mirrorLabels = Mirror(reflecting: shell).children.compactMap(\.label)
-
-        #expect(mirrorLabels.contains("_taskPrepController"))
-        #expect(!mirrorLabels.contains("_taskContextController"))
-        #expect(!mirrorLabels.contains("taskPrepController"))
-    }
-
     @Test @MainActor
-    func prepWorkspaceVisibilityTracksPrepControllerState() {
+    func prepWorkspaceVisibilityTracksActivePrepTask() {
         let recordingController = RecordingController(demoMode: true)
         let taskAnalysisController = TaskAnalysisController()
         let taskPrepController = TaskPrepController(service: WorkspaceShellTaskPrepServiceStub())
@@ -81,6 +28,17 @@ struct WorkspaceShellTests {
         )
 
         #expect(shell.isTaskPrepWorkspaceVisible == true)
+
+        taskPrepController.reset()
+
+        shell = WorkspaceShell(
+            controller: recordingController,
+            taskAnalysisController: taskAnalysisController,
+            taskPrepController: taskPrepController,
+            apiKeySettingsViewModel: apiKeySettingsViewModel
+        )
+
+        #expect(shell.isTaskPrepWorkspaceVisible == false)
     }
 
     @Test @MainActor

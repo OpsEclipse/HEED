@@ -20,6 +20,135 @@ extension TaskPrepConversationServicing {
     func submitTranscript(scope: TaskPrepTranscriptRequest, session: TranscriptSession) {}
 }
 
+@MainActor
+final class TaskPrepFixtureConversationService: TaskPrepConversationServicing {
+    private struct FixtureTurn {
+        let events: [TaskPrepConversationEvent]
+    }
+
+    private let delay: Duration
+    private var currentInput: TaskPrepTurnInput?
+
+    init(delay: Duration = .milliseconds(120)) {
+        self.delay = delay
+    }
+
+    convenience init(processInfo: ProcessInfo = .processInfo) {
+        let delay: Duration = processInfo.arguments.contains("--heed-ui-test") ? .milliseconds(90) : .milliseconds(120)
+        self.init(delay: delay)
+    }
+
+    func beginTurn(input: TaskPrepTurnInput) -> AsyncThrowingStream<TaskPrepConversationEvent, Error> {
+        currentInput = input
+        return makeStream(turn: initialTurn(for: input))
+    }
+
+    func sendUserMessage(_ message: String) -> AsyncThrowingStream<TaskPrepConversationEvent, Error> {
+        guard let currentInput else {
+            return AsyncThrowingStream { continuation in
+                continuation.finish(
+                    throwing: OpenAITaskPrepConversationServiceError.failedTurn(
+                        "Task prep conversation is not ready for a follow-up message."
+                    )
+                )
+            }
+        }
+
+        return makeStream(turn: followUpTurn(for: currentInput, message: message))
+    }
+
+    func submitTranscript(scope: TaskPrepTranscriptRequest, session: TranscriptSession) {}
+
+    private func makeStream(turn: FixtureTurn) -> AsyncThrowingStream<TaskPrepConversationEvent, Error> {
+        AsyncThrowingStream { continuation in
+            let task = Task {
+                do {
+                    for event in turn.events {
+                        try await Task.sleep(for: delay)
+                        try Task.checkCancellation()
+                        continuation.yield(event)
+                    }
+
+                    continuation.finish()
+                } catch is CancellationError {
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+
+            continuation.onTermination = { _ in
+                task.cancel()
+            }
+        }
+    }
+
+    private func initialTurn(for input: TaskPrepTurnInput) -> FixtureTurn {
+        FixtureTurn(
+            events: [
+                .assistantTextDelta("I think we have enough context to proceed. "),
+                .assistantTextDelta("Do you want me to spawn the agent now?"),
+                .contextDraft(makeContextDraft(for: input)),
+                .spawnAgentRequest(
+                    .init(reason: "The brief is stable and ready for approval before handoff.")
+                ),
+                .completed
+            ]
+        )
+    }
+
+    private func followUpTurn(for input: TaskPrepTurnInput, message: String) -> FixtureTurn {
+        let trimmedMessage = message.trimmingCharacters(in: .whitespacesAndNewlines)
+        let acknowledgement = trimmedMessage.isEmpty ? "that follow-up" : "\"\(trimmedMessage)\""
+        var draft = makeContextDraft(for: input)
+        draft.openQuestions = [
+            "Should the next agent start from the current prep brief or from a fresh task analysis?",
+            "The user asked to refine \(acknowledgement)."
+        ]
+
+        return FixtureTurn(
+            events: [
+                .assistantTextDelta("I updated the brief to reflect \(acknowledgement)."),
+                .contextDraft(draft),
+                .completed
+            ]
+        )
+    }
+
+    private func makeContextDraft(for input: TaskPrepTurnInput) -> TaskPrepContextDraft {
+        let evidenceSegment = input.session.segments.first { input.task.evidenceSegmentIDs.contains($0.id) }
+            ?? input.session.segments.first
+
+        let evidence = TaskPrepEvidence(
+            id: "fixture-evidence-\(input.task.id)",
+            label: "Meeting evidence",
+            excerpt: evidenceSegment?.text ?? input.task.evidenceExcerpt,
+            segmentIDs: evidenceSegment.map { [$0.id] } ?? input.task.evidenceSegmentIDs
+        )
+
+        return TaskPrepContextDraft(
+            summary: "Prepare the transcript review follow-up.",
+            goal: "Turn the captured audio review into a short implementation handoff with clear approval before spawning.",
+            constraints: [
+                "Keep the transcript evidence tied to the current task.",
+                "Do not hide the prep workspace while the first turn is streaming."
+            ],
+            acceptanceCriteria: [
+                "The prep workspace shows a stable brief after the streamed turn completes.",
+                "The assistant asks for approval before the spawn action becomes available."
+            ],
+            risks: [
+                "The underlying audio issue may still be environmental, so the follow-up should stay scoped to verification first."
+            ],
+            openQuestions: [
+                "Should the final spawn action immediately hand off to another agent or pause on approval?"
+            ],
+            evidence: [evidence],
+            readyToSpawn: true
+        )
+    }
+}
+
 enum OpenAITaskPrepConversationServiceError: LocalizedError, Equatable {
     case failedTurn(String)
     case invalidToolArguments(toolName: String, message: String)

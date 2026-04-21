@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct ContentView: View {
@@ -5,6 +6,7 @@ struct ContentView: View {
     @State private var taskAnalysisController: TaskAnalysisController
     @State private var taskPrepController: TaskPrepController
     @State private var apiKeySettingsViewModel: APIKeySettingsViewModel
+    private let isUITestMode: Bool
 
     @MainActor
     init(
@@ -14,6 +16,7 @@ struct ContentView: View {
         apiKeySettingsViewModel: APIKeySettingsViewModel? = nil,
         processInfo: ProcessInfo = .processInfo
     ) {
+        isUITestMode = processInfo.arguments.contains("--heed-ui-test")
         _controller = StateObject(wrappedValue: controller)
         _taskAnalysisController = State(
             initialValue: taskAnalysisController ?? makeTaskAnalysisController(processInfo: processInfo)
@@ -34,6 +37,13 @@ struct ContentView: View {
             apiKeySettingsViewModel: apiKeySettingsViewModel
         )
         .background(HeedTheme.ColorToken.canvas)
+        .task {
+            guard isUITestMode else {
+                return
+            }
+
+            NSApplication.shared.activate(ignoringOtherApps: true)
+        }
     }
 }
 
@@ -53,7 +63,7 @@ func makeTaskPrepController(processInfo: ProcessInfo = .processInfo) -> TaskPrep
     let service: any TaskPrepConversationServicing
 
     if processInfo.arguments.contains("--heed-ui-test") {
-        service = OpenAITaskPrepConversationService()
+        service = TaskPrepFixtureConversationService(processInfo: processInfo)
     } else {
         service = OpenAITaskPrepConversationService()
     }

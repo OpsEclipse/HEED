@@ -24,7 +24,7 @@ struct WorkspaceShell: View {
     }
 
     var isTaskPrepWorkspaceVisible: Bool {
-        taskPrepController.viewState != TaskPrepViewState()
+        taskPrepController.activeTaskID != nil
     }
 
     var body: some View {
