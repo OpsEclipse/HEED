@@ -4,7 +4,7 @@ import CoreMedia
 import Foundation
 import ScreenCaptureKit
 
-final class SystemAudioCaptureManager: NSObject {
+final class SystemAudioCaptureManager: NSObject, SystemAudioCaptureManaging {
     private let targetFormat = AVAudioFormat(
         commonFormat: .pcmFormatFloat32,
         sampleRate: 16_000,
@@ -47,6 +47,7 @@ final class SystemAudioCaptureManager: NSObject {
         configuration.showsCursor = false
 
         let stream = SCStream(filter: filter, configuration: configuration, delegate: self)
+        try stream.addStreamOutput(self, type: .screen, sampleHandlerQueue: sampleHandlerQueue)
         try stream.addStreamOutput(self, type: .audio, sampleHandlerQueue: sampleHandlerQueue)
         try await stream.startCapture()
         self.stream = stream
@@ -56,6 +57,8 @@ final class SystemAudioCaptureManager: NSObject {
         isStopping = true
         if let stream {
             try? await stream.stopCapture()
+            try? stream.removeStreamOutput(self, type: .screen)
+            try? stream.removeStreamOutput(self, type: .audio)
         }
         self.stream = nil
         self.converter = nil

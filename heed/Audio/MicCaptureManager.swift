@@ -1,7 +1,7 @@
 import AVFoundation
 import Foundation
 
-final class MicCaptureManager {
+final class MicCaptureManager: MicCaptureManaging {
     private let engine = AVAudioEngine()
     private let targetFormat = AVAudioFormat(
         commonFormat: .pcmFormatFloat32,
@@ -38,7 +38,11 @@ final class MicCaptureManager {
         }
 
         engine.prepare()
-        try engine.start()
+        do {
+            try engine.start()
+        } catch {
+            throw wrapStartupError(error)
+        }
     }
 
     func stop() {
@@ -87,5 +91,17 @@ final class MicCaptureManager {
         let frameLength = Int(buffer.frameLength)
         let samples = UnsafeBufferPointer(start: channelData[0], count: frameLength)
         return Array(samples)
+    }
+
+    private func wrapStartupError(_ error: Error) -> Error {
+        let nsError = error as NSError
+        guard nsError.domain == NSOSStatusErrorDomain, nsError.code == -10877 else {
+            return error
+        }
+
+        return NSError(domain: "Heed.MicCapture", code: nsError.code, userInfo: [
+            NSLocalizedDescriptionKey: "Heed could not connect to the current microphone. In System Settings > Sound, choose a built-in or connected input device, then try recording again.",
+            NSUnderlyingErrorKey: nsError
+        ])
     }
 }

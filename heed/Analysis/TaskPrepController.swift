@@ -6,6 +6,7 @@ final class TaskPrepController: ObservableObject {
     @Published private(set) var viewState = TaskPrepViewState()
 
     private let service: any TaskPrepConversationServicing
+    private let handoffLauncher: any TaskPrepAgentHandoffLaunching
     private var activeSession: TranscriptSession?
     private var activeTask: CompiledTask?
     private var activeTurnTask: Task<Void, Never>?
@@ -19,8 +20,16 @@ final class TaskPrepController: ObservableObject {
         activeTask?.title
     }
 
-    init(service: any TaskPrepConversationServicing) {
+    convenience init(service: any TaskPrepConversationServicing) {
+        self.init(service: service, handoffLauncher: TaskPrepTerminalHandoffLauncher())
+    }
+
+    init(
+        service: any TaskPrepConversationServicing,
+        handoffLauncher: any TaskPrepAgentHandoffLaunching
+    ) {
         self.service = service
+        self.handoffLauncher = handoffLauncher
     }
 
     func start(task: CompiledTask, in session: TranscriptSession) {
@@ -51,6 +60,11 @@ final class TaskPrepController: ObservableObject {
     }
 
     func approveSpawn() {
+        if viewState.pendingSpawnRequest != nil {
+            launchApprovedSpawn()
+            return
+        }
+
         viewState.spawnStatus = .approvalGranted
     }
 
@@ -125,16 +139,19 @@ final class TaskPrepController: ObservableObject {
         case let .spawnAgentRequest(request):
             viewState.pendingSpawnRequest = request
             if viewState.spawnStatus == .approvalGranted {
-                viewState.spawnStatus = .readyToSpawn
+                launchApprovedSpawn()
             } else {
                 viewState.spawnStatus = .blockedWaitingForApproval
             }
         case .completed:
+            let completedDraft = viewState.pendingContextDraft ?? viewState.stableContextDraft
+
             if let pendingContextDraft = viewState.pendingContextDraft {
                 viewState.stableContextDraft = pendingContextDraft
                 viewState.pendingContextDraft = nil
             }
 
+            fillEmptyAssistantMessageIfNeeded(using: completedDraft)
             viewState.turnState = .completed
             clearActiveTurnIfNeeded(turnID)
         }
@@ -163,10 +180,71 @@ final class TaskPrepController: ObservableObject {
         viewState.messages[assistantIndex].text.append(delta)
     }
 
+    private func fillEmptyAssistantMessageIfNeeded(using draft: TaskPrepContextDraft?) {
+        let fallbackText = fallbackAssistantMessage(using: draft)
+
+        if let assistantIndex = viewState.messages.lastIndex(where: { $0.role == .assistant }) {
+            guard viewState.messages[assistantIndex].text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                return
+            }
+
+            viewState.messages[assistantIndex].text = fallbackText
+            return
+        }
+
+        viewState.messages.append(TaskPrepMessage(role: .assistant, text: fallbackText))
+    }
+
+    private func fallbackAssistantMessage(using draft: TaskPrepContextDraft?) -> String {
+        if let openQuestion = draft?.openQuestions.first?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !openQuestion.isEmpty {
+            return openQuestion
+        }
+
+        if let taskTitle = activeTask?.title.trimmingCharacters(in: .whitespacesAndNewlines),
+           !taskTitle.isEmpty {
+            return "What should I clarify first about \"\(taskTitle)\"?"
+        }
+
+        return "What should I clarify first about this task?"
+    }
+
     private func cancelActiveTurn() {
         activeTurnID = UUID()
         activeTurnTask?.cancel()
         activeTurnTask = nil
+    }
+
+    private func launchApprovedSpawn() {
+        guard let activeTask,
+              let activeSession,
+              let pendingSpawnRequest = viewState.pendingSpawnRequest else {
+            viewState.spawnStatus = .approvalGranted
+            return
+        }
+
+        let draft = viewState.stableContextDraft ?? viewState.pendingContextDraft ?? TaskPrepContextDraft(
+            summary: activeTask.title,
+            goal: activeTask.details,
+            readyToSpawn: true
+        )
+        let prompt = TaskPrepAgentHandoffPromptBuilder.buildPrompt(
+            task: activeTask,
+            transcriptSegments: activeSession.segments,
+            draft: draft,
+            messages: viewState.messages,
+            request: pendingSpawnRequest
+        )
+
+        do {
+            viewState.spawnStatus = .readyToSpawn
+            try handoffLauncher.launch(prompt: prompt)
+            viewState.spawnStatus = .launched
+            viewState.pendingSpawnRequest = nil
+        } catch {
+            let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            viewState.spawnStatus = .launchFailed(message)
+        }
     }
 
     private func clearActiveTurnIfNeeded(_ turnID: UUID) {

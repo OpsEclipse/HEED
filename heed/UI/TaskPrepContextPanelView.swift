@@ -28,9 +28,10 @@ struct TaskPrepContextPanelView: View {
                         draftSection("Constraints", lines: displayedDraft.constraints)
                         draftSection("Acceptance", lines: displayedDraft.acceptanceCriteria)
                         draftSection("Risks", lines: displayedDraft.risks)
-                        draftSection("Open questions", lines: displayedDraft.openQuestions)
                         evidenceSection(displayedDraft.evidence)
-                        spawnSection(for: displayedDraft)
+                        if shouldShowSpawnSection {
+                            spawnSection(for: displayedDraft)
+                        }
                     }
                     .padding(.bottom, 20)
                 }
@@ -42,7 +43,6 @@ struct TaskPrepContextPanelView: View {
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 22)
-        .frame(width: 344)
         .frame(maxHeight: .infinity, alignment: .topLeading)
         .background(HeedTheme.ColorToken.panel)
         .overlay(alignment: .leading) {
@@ -95,6 +95,27 @@ struct TaskPrepContextPanelView: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    func visibleSectionTitles(for draft: TaskPrepContextDraft) -> [String] {
+        var titles = ["Summary", "Goal", "Constraints", "Acceptance", "Risks"]
+
+        if !draft.evidence.isEmpty {
+            titles.append("Evidence")
+        }
+
+        if shouldShowSpawnSection {
+            titles.append("Spawn approval")
+        }
+        return titles
+    }
+
+    private var shouldShowSpawnSection: Bool {
+        if case .launched = controller.viewState.spawnStatus {
+            return false
+        }
+
+        return true
     }
 
     private func draftSection(_ title: String, lines: [String]) -> some View {
@@ -194,8 +215,8 @@ struct TaskPrepContextPanelView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            if controller.viewState.spawnStatus == .blockedWaitingForApproval {
-                Button("Approve spawn") {
+            if shouldShowSpawnButton {
+                Button(spawnButtonTitle) {
                     controller.approveSpawn()
                 }
                 .buttonStyle(
@@ -259,7 +280,31 @@ struct TaskPrepContextPanelView: View {
         case .blockedWaitingForApproval:
             return "The assistant asked to spawn an agent. Review the brief, then approve when it looks right."
         case .readyToSpawn:
-            return "Spawn is approved for this task."
+            return "Launching the approved Codex handoff."
+        case .launched:
+            return ""
+        case let .launchFailed(message):
+            return message
+        }
+    }
+
+    private var shouldShowSpawnButton: Bool {
+        switch controller.viewState.spawnStatus {
+        case .blockedWaitingForApproval:
+            return true
+        case .launchFailed:
+            return controller.viewState.pendingSpawnRequest != nil
+        case .idle, .approvalGranted, .readyToSpawn, .launched:
+            return false
+        }
+    }
+
+    private var spawnButtonTitle: String {
+        switch controller.viewState.spawnStatus {
+        case .launchFailed:
+            return "Retry spawn"
+        case .idle, .approvalGranted, .blockedWaitingForApproval, .readyToSpawn, .launched:
+            return "Approve spawn"
         }
     }
 }

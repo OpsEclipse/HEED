@@ -30,6 +30,52 @@ struct OpenAIResponsesStreamTests {
         ])
     }
 
+    @Test func parserAllowsFunctionArgumentDeltaWithoutCallID() throws {
+        let payload = [
+            "event: response.function_call_arguments.delta",
+            "data: {\"item_id\":\"item_123\",\"output_index\":0,\"sequence_number\":2,\"delta\":\"{\\\"approval\\\":true}\"}",
+            ""
+        ].joined(separator: "\n")
+
+        let events = try OpenAIResponsesStreamParser().parse(payload)
+
+        #expect(events == [
+            .functionArgumentsDelta(
+                OpenAIStreamFunctionCallMetadata(
+                    callID: nil,
+                    itemID: "item_123",
+                    outputIndex: 0,
+                    sequenceNumber: 2
+                ),
+                "{\"approval\":true}"
+            )
+        ])
+    }
+
+    @Test func parserEmitsFunctionCallItemAddedWithCallID() throws {
+        let payload = [
+            "event: response.output_item.added",
+            "data: {\"output_index\":0,\"item\":{\"type\":\"function_call\",\"id\":\"item_123\",\"call_id\":\"call_123\",\"name\":\"get_meeting_transcript\",\"arguments\":\"\"}}",
+            ""
+        ].joined(separator: "\n")
+
+        let events = try OpenAIResponsesStreamParser().parse(payload)
+
+        #expect(events == [
+            .functionCallItemAdded(
+                OpenAIStreamFunctionCallIdentity(
+                    metadata: OpenAIStreamFunctionCallMetadata(
+                        callID: "call_123",
+                        itemID: "item_123",
+                        outputIndex: 0,
+                        sequenceNumber: nil
+                    ),
+                    name: "get_meeting_transcript"
+                )
+            )
+        ])
+    }
+
     @Test func parserEmitsCompletedFunctionCallWithIdentityMetadata() throws {
         let payload = [
             "event: response.function_call_arguments.done",
@@ -41,15 +87,83 @@ struct OpenAIResponsesStreamTests {
 
         #expect(events == [
             .functionCallCompleted(
-                OpenAIStreamFunctionCallMetadata(
-                    callID: "call_123",
-                    itemID: "item_123",
-                    outputIndex: 0,
-                    sequenceNumber: 3
+                OpenAIStreamFunctionCallIdentity(
+                    metadata: OpenAIStreamFunctionCallMetadata(
+                        callID: "call_123",
+                        itemID: "item_123",
+                        outputIndex: 0,
+                        sequenceNumber: 3
+                    ),
+                    name: "get_meeting_transcript"
                 ),
-                name: "get_meeting_transcript",
                 arguments: "{\"scope\":\"next_steps\"}"
             )
+        ])
+    }
+
+    @Test func parserEmitsCompletedFunctionCallFromNestedItem() throws {
+        let payload = [
+            "event: response.function_call_arguments.done",
+            "data: {\"output_index\":0,\"sequence_number\":3,\"item\":{\"id\":\"item_123\",\"call_id\":\"call_123\",\"name\":\"get_meeting_transcript\",\"arguments\":\"{\\\"scope\\\":\\\"next_steps\\\"}\"}}",
+            ""
+        ].joined(separator: "\n")
+
+        let events = try OpenAIResponsesStreamParser().parse(payload)
+
+        #expect(events == [
+            .functionCallCompleted(
+                OpenAIStreamFunctionCallIdentity(
+                    metadata: OpenAIStreamFunctionCallMetadata(
+                        callID: "call_123",
+                        itemID: "item_123",
+                        outputIndex: 0,
+                        sequenceNumber: 3
+                    ),
+                    name: "get_meeting_transcript"
+                ),
+                arguments: "{\"scope\":\"next_steps\"}"
+            )
+        ])
+    }
+
+    @Test func parserAllowsCompletedFunctionCallWithoutName() throws {
+        let payload = [
+            "event: response.function_call_arguments.done",
+            "data: {\"item_id\":\"item_123\",\"output_index\":0,\"sequence_number\":3,\"arguments\":\"{\\\"scope\\\":\\\"next_steps\\\"}\"}",
+            ""
+        ].joined(separator: "\n")
+
+        let events = try OpenAIResponsesStreamParser().parse(payload)
+
+        #expect(events == [
+            .functionCallCompleted(
+                OpenAIStreamFunctionCallIdentity(
+                    metadata: OpenAIStreamFunctionCallMetadata(
+                        callID: nil,
+                        itemID: "item_123",
+                        outputIndex: 0,
+                        sequenceNumber: 3
+                    ),
+                    name: nil
+                ),
+                arguments: "{\"scope\":\"next_steps\"}"
+            )
+        ])
+    }
+
+    @Test func parserHandlesStreamingLinesWithoutBlankSeparators() throws {
+        let payload = [
+            "event: response.output_text.delta",
+            "data: {\"delta\":\"Hello\"}",
+            "event: response.completed",
+            #"data: {"response":{"id":"resp_no_blank"}}"#
+        ].joined(separator: "\n")
+
+        let events = try OpenAIResponsesStreamParser().parse(payload)
+
+        #expect(events == [
+            .textDelta("Hello"),
+            .completed(responseID: "resp_no_blank")
         ])
     }
 
@@ -126,6 +240,9 @@ struct OpenAIResponsesStreamTests {
         #expect(allText.contains(sampleTask().title))
         #expect(allText.contains(sampleTask().details))
         #expect(allText.contains(sampleTask().evidenceExcerpt))
+        #expect(allText.contains("If you need missing information from the user, ask only the direct question in chat.") == true)
+        #expect(allText.contains("Do not narrate your process or mention internal tools.") == true)
+        #expect(allText.contains("Stream short assistant updates as you think.") == false)
         #expect(allText.contains("Transcript summary:") == false)
         #expect(allText.contains("We should prepare a context packet.") == false)
         #expect(allText.contains("[MIC") == false)
@@ -192,8 +309,67 @@ struct OpenAIResponsesStreamTests {
 
         let output = toolOutput["output"] as? String ?? ""
         #expect(output.contains("Requested scope: next_steps"))
+        #expect(output.contains(session.segments[0].id.uuidString))
         #expect(output.contains("We should prepare a context packet."))
         #expect(output.contains("The side panel should stay visible."))
+    }
+
+    @Test func taskPrepServiceUsesFunctionIdentityFromOutputItemAddedWhenDoneOmitsIt() async throws {
+        let transport = ScriptedStreamingTransport(
+            payloads: [
+                [
+                    "event: response.output_item.added",
+                    "data: {\"output_index\":0,\"item\":{\"type\":\"function_call\",\"id\":\"item_transcript\",\"call_id\":\"call_transcript\",\"name\":\"get_meeting_transcript\",\"arguments\":\"\"}}",
+                    "",
+                    "event: response.function_call_arguments.done",
+                    "data: {\"item_id\":\"item_transcript\",\"output_index\":0,\"sequence_number\":1,\"arguments\":\"{\\\"scope\\\":\\\"next_steps\\\"}\"}",
+                    "",
+                    "event: response.completed",
+                    #"data: {"response":{"id":"resp_initial"}}"#,
+                    ""
+                ].joined(separator: "\n"),
+                [
+                    "event: response.output_text.delta",
+                    "data: {\"delta\":\"I reviewed the transcript and updated the plan.\"}",
+                    "",
+                    "event: response.completed",
+                    #"data: {"response":{"id":"resp_followup"}}"#,
+                    ""
+                ].joined(separator: "\n")
+            ]
+        )
+        let session = sampleSession()
+        let service = OpenAITaskPrepConversationService(
+            client: OpenAIResponsesClient(
+                model: "gpt-5.4",
+                apiKeyProvider: { "sk-test" },
+                transport: transport
+            )
+        )
+
+        let stream = service.beginTurn(input: TaskPrepTurnInput(task: sampleTask(), session: session))
+        var iterator = stream.makeAsyncIterator()
+
+        let firstEvent = try #require(try await iterator.next())
+        #expect(firstEvent == .transcriptToolRequest(.init(scope: "next_steps")))
+
+        service.submitTranscript(scope: .init(scope: "next_steps"), session: session)
+
+        var remainingEvents: [TaskPrepConversationEvent] = []
+        while let event = try await iterator.next() {
+            remainingEvents.append(event)
+        }
+
+        #expect(remainingEvents == [
+            .assistantTextDelta("I reviewed the transcript and updated the plan."),
+            .completed
+        ])
+
+        let requests = transport.recordedJSONBodies()
+        let followupRequest = try #require(requests.last)
+        let followupInput = try #require(followupRequest["input"] as? [[String: Any]])
+        let toolOutput = try #require(followupInput.first)
+        #expect(toolOutput["call_id"] as? String == "call_transcript")
     }
 
     @Test func taskPrepServiceContinuesConversationWithUserFollowUp() async throws {
@@ -252,6 +428,140 @@ struct OpenAIResponsesStreamTests {
         let textItem = try #require(content.first)
         #expect(textItem["type"] as? String == "input_text")
         #expect(textItem["text"] as? String == "What did the meeting suggest?")
+    }
+
+    @Test func taskPrepServiceIgnoresInvalidEvidenceSegmentIDsInContextDrafts() async throws {
+        let session = sampleSession()
+        let validSegmentID = session.segments[1].id.uuidString
+        let transport = ScriptedStreamingTransport(
+            payloads: [
+                [
+                    "event: response.function_call_arguments.done",
+                    "data: {\"call_id\":\"call_draft\",\"item_id\":\"item_draft\",\"output_index\":0,\"sequence_number\":1,\"name\":\"update_context_draft\",\"arguments\":\"{\\\"summary\\\":\\\"Pin the context panel update.\\\",\\\"goal\\\":\\\"Stop the button from animating during the panel clip-down.\\\",\\\"constraints\\\":[\\\"Keep the current layout.\\\"],\\\"acceptanceCriteria\\\":[\\\"The reload button stays still during the closing transition.\\\"],\\\"risks\\\":[\\\"Animation state could leak between views.\\\"],\\\"openQuestions\\\":[],\\\"evidence\\\":[{\\\"id\\\":\\\"evidence-1\\\",\\\"label\\\":\\\"Transcript evidence\\\",\\\"excerpt\\\":\\\"The reload icon swings during clip-down.\\\",\\\"segmentIDs\\\":[\\\"line-2\\\",\\\"\(validSegmentID)\\\"]}],\\\"readyToSpawn\\\":false}\"}",
+                    "",
+                    "event: response.completed",
+                    #"data: {"response":{"id":"resp_context"}}"#,
+                    ""
+                ].joined(separator: "\n"),
+                [
+                    "event: response.completed",
+                    #"data: {"response":{"id":"resp_context_ack"}}"#,
+                    ""
+                ].joined(separator: "\n")
+            ]
+        )
+        let service = OpenAITaskPrepConversationService(
+            client: OpenAIResponsesClient(
+                model: "gpt-5.4",
+                apiKeyProvider: { "sk-test" },
+                transport: transport
+            )
+        )
+
+        let events = try await collect(
+            from: service.beginTurn(input: TaskPrepTurnInput(task: sampleTask(), session: session))
+        )
+
+        #expect(events == [
+            .contextDraft(
+                TaskPrepContextDraft(
+                    summary: "Pin the context panel update.",
+                    goal: "Stop the button from animating during the panel clip-down.",
+                    constraints: ["Keep the current layout."],
+                    acceptanceCriteria: ["The reload button stays still during the closing transition."],
+                    risks: ["Animation state could leak between views."],
+                    openQuestions: [],
+                    evidence: [
+                        TaskPrepEvidence(
+                            id: "evidence-1",
+                            label: "Transcript evidence",
+                            excerpt: "The reload icon swings during clip-down.",
+                            segmentIDs: [session.segments[1].id]
+                        )
+                    ],
+                    readyToSpawn: false
+                )
+            ),
+            .completed
+        ])
+
+        let requests = transport.recordedJSONBodies()
+        #expect(requests.count == 2)
+
+        let followupRequest = try #require(requests.last)
+        #expect(followupRequest["previous_response_id"] as? String == "resp_context")
+
+        let followupInput = try #require(followupRequest["input"] as? [[String: Any]])
+        let toolOutput = try #require(followupInput.first)
+        #expect(toolOutput["type"] as? String == "function_call_output")
+        #expect(toolOutput["call_id"] as? String == "call_draft")
+    }
+
+    @Test func taskPrepServiceAcknowledgesContextDraftAndSpawnToolCalls() async throws {
+        let transport = ScriptedStreamingTransport(
+            payloads: [
+                [
+                    "event: response.function_call_arguments.done",
+                    "data: {\"call_id\":\"call_draft\",\"item_id\":\"item_draft\",\"output_index\":0,\"sequence_number\":1,\"name\":\"update_context_draft\",\"arguments\":\"{\\\"summary\\\":\\\"Stable summary\\\",\\\"goal\\\":\\\"Collect more implementation context.\\\",\\\"constraints\\\":[\\\"Stay in the current workspace.\\\"],\\\"acceptanceCriteria\\\":[\\\"The assistant asks a direct follow-up question.\\\"],\\\"risks\\\":[\\\"The assistant could over-explain its plan.\\\"],\\\"openQuestions\\\":[],\\\"evidence\\\":[],\\\"readyToSpawn\\\":false}\"}",
+                    "",
+                    "event: response.function_call_arguments.done",
+                    "data: {\"call_id\":\"call_spawn\",\"item_id\":\"item_spawn\",\"output_index\":1,\"sequence_number\":2,\"name\":\"spawn_agent\",\"arguments\":\"{\\\"reason\\\":\\\"The task looks implementation-ready after approval.\\\"}\"}",
+                    "",
+                    "event: response.completed",
+                    #"data: {"response":{"id":"resp_initial"}}"#,
+                    ""
+                ].joined(separator: "\n"),
+                [
+                    "event: response.completed",
+                    #"data: {"response":{"id":"resp_followup"}}"#,
+                    ""
+                ].joined(separator: "\n")
+            ]
+        )
+        let service = OpenAITaskPrepConversationService(
+            client: OpenAIResponsesClient(
+                model: "gpt-5.4",
+                apiKeyProvider: { "sk-test" },
+                transport: transport
+            )
+        )
+
+        let events = try await collect(
+            from: service.beginTurn(input: TaskPrepTurnInput(task: sampleTask(), session: sampleSession()))
+        )
+
+        #expect(events == [
+            .contextDraft(
+                TaskPrepContextDraft(
+                    summary: "Stable summary",
+                    goal: "Collect more implementation context.",
+                    constraints: ["Stay in the current workspace."],
+                    acceptanceCriteria: ["The assistant asks a direct follow-up question."],
+                    risks: ["The assistant could over-explain its plan."],
+                    openQuestions: [],
+                    evidence: [],
+                    readyToSpawn: false
+                )
+            ),
+            .spawnAgentRequest(.init(reason: "The task looks implementation-ready after approval.")),
+            .completed
+        ])
+
+        let requests = transport.recordedJSONBodies()
+        #expect(requests.count == 2)
+
+        let followupRequest = try #require(requests.last)
+        #expect(followupRequest["previous_response_id"] as? String == "resp_initial")
+
+        let followupInput = try #require(followupRequest["input"] as? [[String: Any]])
+        #expect(followupInput.count == 2)
+
+        let firstOutput = try #require(followupInput.first)
+        let secondOutput = try #require(followupInput.last)
+        #expect(firstOutput["type"] as? String == "function_call_output")
+        #expect(firstOutput["call_id"] as? String == "call_draft")
+        #expect(secondOutput["type"] as? String == "function_call_output")
+        #expect(secondOutput["call_id"] as? String == "call_spawn")
     }
 
     @Test func taskPrepServiceSurfacesResponseFailed() async {

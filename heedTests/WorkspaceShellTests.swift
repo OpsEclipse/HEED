@@ -60,6 +60,17 @@ struct WorkspaceShellTests {
         #expect(shell.leadingUtilityActions.map { $0.title } == ["Full screen"])
         #expect(shell.trailingUtilityActions.map { $0.title } == ["Set API key", "Copy text"])
     }
+
+    @Test @MainActor
+    func prepWorkspaceUsesSixtyFortySplit() {
+        let workspace = TaskPrepWorkspaceView(
+            controller: TaskPrepController(service: WorkspaceShellTaskPrepServiceStub()),
+            onClose: {}
+        )
+
+        #expect(workspace.chatWidthFraction == 0.6)
+        #expect(workspace.contextWidthFraction == 0.4)
+    }
 }
 
 private struct WorkspaceShellTaskPrepServiceStub: TaskPrepConversationServicing {

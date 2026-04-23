@@ -132,11 +132,14 @@ The chat pane is the live conversation surface.
 The right pane is the stable handoff draft.
 
 - It shows `Summary`, `Goal`, `Constraints`, `Acceptance`, `Risks`, `Open questions`, and `Evidence`.
-- It renders the latest pending brief while a turn is streaming.
+- If there is no stable brief yet, it can render the latest pending brief while the first turn is streaming.
+- If a stable brief already exists, it keeps showing that stable brief during later turns and adds `Updating brief...` while the new pending draft is still in flight.
 - It promotes that pending brief to the stable brief only after the controller receives a completed turn.
 - It shows `Updating brief...` when a new draft arrives during a later turn.
 - It includes a `Spawn approval` section that explains whether the model has asked to spawn and whether the user approved it.
 - It shows `Approve spawn` only when a spawn request is blocked waiting for approval.
+- A successful approval launches Terminal and starts `codex` immediately, then removes the spawn section instead of showing extra success chrome [extra UI whose only job is confirming success].
+- If that handoff fails, the section stays visible and offers `Retry spawn`.
 
 ## Current Interaction Pattern
 
@@ -160,7 +163,8 @@ The right pane is the stable handoff draft.
 18. If the model asks for more evidence, the service uses a read-only transcript tool for the selected session only.
 19. The right panel pins a stable brief after the turn completes.
 20. If the model asks to spawn, the right panel shows the approval request and the user can click `Approve spawn`.
-21. Closing the workspace, switching sessions, or starting prep for another task clears the prep chat and brief because they are intentionally temporary.
+21. A successful approval opens Terminal and starts `codex` with the approved brief right away.
+22. Closing the workspace, switching sessions, or starting prep for another task clears the prep chat and brief because they are intentionally temporary.
 
 ## Current UI Behavior
 
@@ -211,6 +215,7 @@ The right pane is the stable handoff draft.
 - Keep the latest stable brief visible on the right while a follow-up turn is in flight.
 - Do not persist the prep chat or prep brief to disk.
 - Keep spawn blocked until the user explicitly approves it.
+- Do not add extra success UI after the Terminal handoff starts. Failure states can stay visible because they need recovery.
 
 ## Current Modules
 

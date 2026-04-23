@@ -154,7 +154,7 @@ struct TaskPrepChatView: View {
     }
 }
 
-private struct TaskPrepMessageBubble: View {
+struct TaskPrepMessageBubble: View {
     let message: TaskPrepMessage
 
     var body: some View {
@@ -166,18 +166,34 @@ private struct TaskPrepMessageBubble: View {
             Text(message.text.isEmpty ? " " : message.text)
                 .font(.system(size: 14))
                 .foregroundStyle(HeedTheme.ColorToken.textPrimary)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 12)
-                .background(bubbleFill)
+                .frame(maxWidth: usesContentWidth ? 560 : .infinity, alignment: .leading)
+                .padding(.horizontal, usesFlatChrome ? 0 : 14)
+                .padding(.vertical, usesFlatChrome ? 0 : 12)
+                .background {
+                    if !usesFlatChrome {
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(bubbleFill)
+                    }
+                }
                 .overlay {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .stroke(bubbleBorder, lineWidth: 1)
+                    if !usesFlatChrome {
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .stroke(bubbleBorder, lineWidth: 1)
+                    }
                 }
         }
         .frame(maxWidth: 560, alignment: bubbleAlignment)
         .frame(maxWidth: .infinity, alignment: bubbleAlignment)
+    }
+
+    var usesFlatChrome: Bool {
+        message.role == .assistant
+    }
+
+    var usesContentWidth: Bool {
+        message.role == .user
     }
 
     private var roleLabel: String {

@@ -66,12 +66,14 @@ The current product pipeline has two big paths.
 7. `TaskAnalysisController`
    Runs the first OpenAI pass only after the user clicks `Compile tasks`. This pass returns grouped tasks with the types `Feature`, `Bug fix`, and `Miscellaneous`.
 8. `TaskPrepController`
-   Owns the second pass after the user clicks `Prepare context`. It tracks chat messages, streamed turn state, a pending brief, a stable brief, and the spawn approval state for one selected task.
+   Owns the second pass after the user clicks `Prepare context`. It tracks chat messages, streamed turn state, a pending brief, a stable brief, the spawn approval state for one selected task, and the final handoff launch after approval.
 9. `OpenAITaskPrepConversationService`
    Uses the Responses API with streaming [a reply that arrives in small pieces over one connection], reuses the previous response ID for follow-up turns, and exposes three tools: read-only `get_meeting_transcript`, `update_context_draft`, and guarded `spawn_agent`.
-10. `WorkspaceShell`
+10. `TaskPrepTerminalHandoffLauncher`
+    Builds a Codex prompt from the selected task, stable brief, open questions, transcript evidence, full session transcript, and prep chat, then uses Apple Events [a macOS automation message between apps] to launch `codex` in Terminal and paste the approved brief through `System Events`.
+11. `WorkspaceShell`
     Shows the transcript-first shell by default, then swaps the main canvas to a split prep workspace while task prep is active.
-11. Export layer
+12. Export layer
     Builds clipboard, text-file, and Markdown-file transcript output from the merged compatibility `segments` view. The current shell surfaces clipboard copy. File export still lives below the UI.
 
 ## Task-Prep Workspace Boundaries
@@ -82,8 +84,8 @@ These boundaries matter for the shipped prep flow.
 - The right-side brief panel renders controller state. It does not build the draft itself.
 - The prep service may read transcript text only through `get_meeting_transcript`.
 - The transcript tool must stay scoped to the selected session. It must not browse all saved sessions.
-- `update_context_draft` can update the pending brief during a turn, but the controller should pin that brief as stable only after the turn completes.
-- `spawn_agent` is advisory in the current shipped UI. The model can request it, but the app still requires explicit user approval before the request becomes ready.
+- `update_context_draft` can update the pending brief during a turn, but the controller should pin that brief as stable only after the turn completes. When a stable brief already exists, the current panel keeps that stable brief visible and shows `Updating brief...` until the new turn finishes.
+- `spawn_agent` is advisory until the user approves it. After that click, the app builds a Codex handoff brief locally and launches Terminal immediately.
 - Prep chat state is memory-only. It is not written into the saved transcript session format.
 
 ## Important Boundaries
@@ -110,7 +112,7 @@ These invariants [rules that should always stay true] are either already true or
 - If the product claims local transcription, raw meeting audio should not silently leave the machine.
 - The prep workspace must reset when the user closes it, switches sessions, or starts prep for a different task.
 - Prep chat messages and prep briefs must stay in memory until the team explicitly approves persistence work.
-- Spawn requests must stay blocked until the user explicitly approves them in the UI.
+- Spawn requests must stay blocked until the user explicitly approves them in the UI, and a successful approval must not persist the prep brief to disk just to launch Terminal.
 
 ## Cross-Cutting Concerns
 

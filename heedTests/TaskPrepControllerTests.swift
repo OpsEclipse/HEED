@@ -84,6 +84,61 @@ struct TaskPrepControllerTests {
         #expect(completedState.stableContextDraft == draft)
     }
 
+    @Test func completedTurnWithoutAssistantTextUsesOpenQuestionAsFallbackMessage() async throws {
+        let service = ControlledTaskPrepConversationService()
+        let controller = await MainActor.run {
+            TaskPrepController(service: service)
+        }
+        var draft = sampleDraft(summary: "Pending draft", goal: "Collect the missing pipeline details")
+        draft.openQuestions = ["What are the required pipeline inputs and outputs?"]
+
+        await MainActor.run {
+            controller.start(task: sampleTask(), in: sampleSession())
+        }
+
+        try await waitForPendingTurnCount(1, service: service)
+        service.completeNextTurn(with: [
+            .contextDraft(draft),
+            .completed
+        ])
+
+        let state = try await waitForPrepState(controller) { state in
+            state.turnState == .completed
+        }
+
+        #expect(state.messages.count == 1)
+        #expect(state.messages[0].role == .assistant)
+        #expect(state.messages[0].text == "What are the required pipeline inputs and outputs?")
+        #expect(state.stableContextDraft == draft)
+    }
+
+    @Test func completedTurnWithoutAssistantTextUsesGenericFallbackWhenDraftHasNoQuestion() async throws {
+        let service = ControlledTaskPrepConversationService()
+        let controller = await MainActor.run {
+            TaskPrepController(service: service)
+        }
+        var draft = sampleDraft(summary: "Pending draft", goal: "Collect the missing pipeline details")
+        draft.openQuestions = []
+
+        await MainActor.run {
+            controller.start(task: sampleTask(title: "Implement data pipeline feature"), in: sampleSession())
+        }
+
+        try await waitForPendingTurnCount(1, service: service)
+        service.completeNextTurn(with: [
+            .contextDraft(draft),
+            .completed
+        ])
+
+        let state = try await waitForPrepState(controller) { state in
+            state.turnState == .completed
+        }
+
+        #expect(state.messages.count == 1)
+        #expect(state.messages[0].role == .assistant)
+        #expect(state.messages[0].text == "What should I clarify first about \"Implement data pipeline feature\"?")
+    }
+
     @Test func transcriptToolRequestSubmitsTranscriptForActiveSession() async throws {
         let service = ControlledTaskPrepConversationService()
         let session = sampleSession()
@@ -131,8 +186,9 @@ struct TaskPrepControllerTests {
 
     @Test func spawnRequestSucceedsAfterApproval() async throws {
         let service = ControlledTaskPrepConversationService()
+        let launcher = RecordingTaskPrepAgentHandoffLauncher()
         let controller = await MainActor.run {
-            TaskPrepController(service: service)
+            TaskPrepController(service: service, handoffLauncher: launcher)
         }
 
         await MainActor.run {
@@ -150,8 +206,9 @@ struct TaskPrepControllerTests {
             state.turnState == .completed
         }
 
-        #expect(state.spawnStatus == .readyToSpawn)
-        #expect(state.pendingSpawnRequest == .init(reason: "ready"))
+        #expect(state.spawnStatus == .launched)
+        #expect(state.pendingSpawnRequest == nil)
+        #expect(await MainActor.run(body: { launcher.prompts.count }) == 1)
     }
 
     @Test func approveSpawnUpdatesVisibleControllerState() async throws {
@@ -174,6 +231,89 @@ struct TaskPrepControllerTests {
 
         let state = await MainActor.run { controller.viewState }
         #expect(state.spawnStatus == .approvalGranted)
+    }
+
+    @Test func approveSpawnLaunchesCodexHandoffImmediatelyWhenRequestIsPending() async throws {
+        let service = ControlledTaskPrepConversationService()
+        let launcher = RecordingTaskPrepAgentHandoffLauncher()
+        let controller = await MainActor.run {
+            TaskPrepController(service: service, handoffLauncher: launcher)
+        }
+        let draft = sampleDraft(summary: "Stable summary", goal: "Launch the agent handoff right away.")
+
+        await MainActor.run {
+            controller.start(task: sampleTask(), in: sampleSession())
+        }
+
+        try await waitForPendingTurnCount(1, service: service)
+        service.completeNextTurn(with: [
+            .assistantTextDelta("The brief looks ready."),
+            .contextDraft(draft),
+            .spawnAgentRequest(.init(reason: "The implementation brief is ready for Codex.")),
+            .completed
+        ])
+
+        _ = try await waitForPrepState(controller) { state in
+            state.turnState == .completed && state.pendingSpawnRequest != nil
+        }
+
+        await MainActor.run {
+            controller.approveSpawn()
+        }
+
+        let launchedPrompt = try #require(await MainActor.run(body: { launcher.prompts.first }))
+        #expect(launchedPrompt.contains("Prepare the follow-up plan"))
+        #expect(launchedPrompt.contains("Stable summary"))
+        #expect(launchedPrompt.contains("Launch the agent handoff right away."))
+        #expect(launchedPrompt.contains("The implementation brief is ready for Codex."))
+    }
+
+    @Test func approveSpawnUsesConversationHistoryInLaunchedBrief() async throws {
+        let service = ControlledTaskPrepConversationService()
+        let launcher = RecordingTaskPrepAgentHandoffLauncher()
+        let controller = await MainActor.run {
+            TaskPrepController(service: service, handoffLauncher: launcher)
+        }
+        let draft = sampleDraft(summary: "Stable summary", goal: "Carry the prep conversation into Codex.")
+
+        await MainActor.run {
+            controller.start(task: sampleTask(), in: sampleSession())
+        }
+
+        try await waitForPendingTurnCount(1, service: service)
+        service.completeNextTurn(with: [
+            .assistantTextDelta("We have enough detail to hand this off."),
+            .contextDraft(draft),
+            .completed
+        ])
+
+        _ = try await waitForPrepState(controller) { state in
+            state.turnState == .completed
+        }
+
+        await MainActor.run {
+            controller.sendUserMessage("Include the transcript evidence and keep it concise.")
+        }
+
+        try await waitForPendingTurnCount(1, service: service)
+        service.completeNextTurn(with: [
+            .assistantTextDelta("I updated the brief and I can spawn the agent now."),
+            .spawnAgentRequest(.init(reason: "The brief and follow-up are both settled.")),
+            .completed
+        ])
+
+        _ = try await waitForPrepState(controller) { state in
+            state.turnState == .completed && state.pendingSpawnRequest != nil && state.messages.count == 3
+        }
+
+        await MainActor.run {
+            controller.approveSpawn()
+        }
+
+        let launchedPrompt = try #require(await MainActor.run(body: { launcher.prompts.first }))
+        #expect(launchedPrompt.contains("Include the transcript evidence and keep it concise."))
+        #expect(launchedPrompt.contains("I updated the brief and I can spawn the agent now."))
+        #expect(launchedPrompt.contains("Transcript evidence"))
     }
 
     @Test func sendUserMessageIsIgnoredWhileTurnIsStillStreaming() async throws {
@@ -464,6 +604,15 @@ private struct WaitForPrepStateError: Error, CustomStringConvertible {
 private struct SubmittedTranscript: Equatable, Sendable {
     let scope: String
     let sessionID: UUID
+}
+
+@MainActor
+private final class RecordingTaskPrepAgentHandoffLauncher: TaskPrepAgentHandoffLaunching {
+    private(set) var prompts: [String] = []
+
+    func launch(prompt: String) throws {
+        prompts.append(prompt)
+    }
 }
 
 private struct TaskPrepServiceStubError: LocalizedError, Equatable, Sendable {

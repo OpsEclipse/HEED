@@ -76,6 +76,8 @@ enum TaskPrepSpawnStatus: Equatable, Sendable {
     case approvalGranted
     case blockedWaitingForApproval
     case readyToSpawn
+    case launched
+    case launchFailed(String)
 }
 
 struct TaskPrepViewState: Equatable, Sendable {

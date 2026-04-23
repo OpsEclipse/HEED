@@ -87,6 +87,10 @@ final class heedUITests: XCTestCase {
         XCTAssertFalse(app.buttons["task-context-close"].exists)
         XCTAssertTrue(app.staticTexts["Prepare the transcript review follow-up."].waitForExistence(timeout: uiTimeout))
 
+        app.buttons["task-prep-approve-spawn"].click()
+        XCTAssertTrue(waitForButtonToDisappear("task-prep-approve-spawn", in: app))
+        XCTAssertFalse(app.staticTexts["Spawn is approved for this task."].exists)
+
         let showSourceButton = app.buttons["task-row-source-verify-audio-paths"]
         XCTAssertTrue(showSourceButton.exists)
         showSourceButton.click()
@@ -120,6 +124,11 @@ final class heedUITests: XCTestCase {
 private func forceQuitHeed() {
     NSRunningApplication.runningApplications(withBundleIdentifier: "sprsh.ca.heed").forEach { app in
         app.forceTerminate()
+
+        let deadline = Date().addingTimeInterval(5)
+        while app.isTerminated == false, Date() < deadline {
+            RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.1))
+        }
     }
 }
 
@@ -141,4 +150,22 @@ private func waitForButtonLabel(
     }
 
     return app.buttons[identifier].exists && app.buttons[identifier].label == expectedLabel
+}
+
+private func waitForButtonToDisappear(
+    _ identifier: String,
+    in app: XCUIApplication,
+    timeout: TimeInterval = 3
+) -> Bool {
+    let deadline = Date().addingTimeInterval(timeout)
+
+    while Date() < deadline {
+        if app.buttons[identifier].exists == false {
+            return true
+        }
+
+        RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.1))
+    }
+
+    return app.buttons[identifier].exists == false
 }

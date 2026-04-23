@@ -52,14 +52,14 @@ final class RecordingController: ObservableObject {
         state == .recording ? "Stop" : "Record"
     }
 
-    private let permissionsManager = PermissionsManager()
+    private let dependencies: RecordingControllerDependencies
     private let sessionStore: SessionStore
     private let demoMode: Bool
     private let modelName = "ggml-base.en"
     private let appVersion: String
 
-    private var micCaptureManager: MicCaptureManager?
-    private var systemAudioCaptureManager: SystemAudioCaptureManager?
+    private var micCaptureManager: (any MicCaptureManaging)?
+    private var systemAudioCaptureManager: (any SystemAudioCaptureManaging)?
     private var micWriter: SourceRecordingFileWriter?
     private var systemWriter: SourceRecordingFileWriter?
     private var sourceFileURLs: [AudioSource: URL] = [:]
@@ -69,11 +69,17 @@ final class RecordingController: ObservableObject {
     private var hasReceivedAudioFrames = false
     private var hasDetectedSpeechLikeAudio = false
 
-    init(demoMode: Bool = false, sessionStore: SessionStore = SessionStore()) {
+    init(
+        demoMode: Bool = false,
+        sessionStore: SessionStore = SessionStore(),
+        dependencies: RecordingControllerDependencies? = nil
+    ) {
+        let resolvedDependencies = dependencies ?? .live()
         self.demoMode = demoMode
         self.sessionStore = sessionStore
+        self.dependencies = resolvedDependencies
         self.appVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0"
-        self.permissions = demoMode ? PermissionSnapshot(microphone: .granted, screenCapture: .granted) : permissionsManager.refresh()
+        self.permissions = demoMode ? PermissionSnapshot(microphone: .granted, screenCapture: .granted) : resolvedDependencies.refreshPermissions()
         self.state = demoMode ? .ready : .idle
 
         Task {
@@ -107,7 +113,7 @@ final class RecordingController: ObservableObject {
 
     func refreshPermissions() {
         let previousGuidance = permissions.guidanceText
-        permissions = demoMode ? PermissionSnapshot(microphone: .granted, screenCapture: .granted) : permissionsManager.refresh()
+        permissions = demoMode ? PermissionSnapshot(microphone: .granted, screenCapture: .granted) : dependencies.refreshPermissions()
         guard state != .recording && state != .stopping else {
             return
         }
@@ -175,10 +181,14 @@ final class RecordingController: ObservableObject {
     }
 
     private func startRecording() async {
+        dependencies.diagnosticSink(.recordingRequested)
         errorMessage = nil
         state = .requestingPermissions
 
-        permissions = demoMode ? PermissionSnapshot(microphone: .granted, screenCapture: .granted) : await permissionsManager.requestIfNeeded()
+        permissions = demoMode ? PermissionSnapshot(microphone: .granted, screenCapture: .granted) : await dependencies.requestPermissionsIfNeeded()
+        dependencies.diagnosticSink(
+            .permissionsResolved(microphone: permissions.microphone, screenCapture: permissions.screenCapture)
+        )
         guard permissions.canRecord else {
             state = .error(permissions.guidanceText)
             errorMessage = permissions.guidanceText
@@ -251,6 +261,9 @@ final class RecordingController: ObservableObject {
         }
 
         self.state = .recording
+        dependencies.diagnosticSink(
+            .recordingStarted(activeSources: activeSources.map(\.label).sorted())
+        )
         startTimer(from: startedAt)
         startStartupWatchdog()
     }
@@ -369,23 +382,30 @@ final class RecordingController: ObservableObject {
             ])
         }
 
-        let micCaptureManager = MicCaptureManager()
-        try micCaptureManager.start { [weak self] frames in
-            do {
-                try writer.write(frames: frames)
-            } catch {
-                Task { [weak self] in
-                    await self?.handleSourceFailure(.mic, message: error.localizedDescription)
+        let micCaptureManager = dependencies.makeMicCaptureManager()
+        dependencies.diagnosticSink(.microphoneStartBegan)
+        do {
+            try micCaptureManager.start { [weak self] frames in
+                do {
+                    try writer.write(frames: frames)
+                } catch {
+                    Task { [weak self] in
+                        await self?.handleSourceFailure(.mic, message: error.localizedDescription)
+                    }
+                    return
                 }
-                return
-            }
 
-            guard let self else { return }
-            Task { @MainActor in
-                self.noteIncomingFrames(frames, from: .mic)
+                guard let self else { return }
+                Task { @MainActor in
+                    self.noteIncomingFrames(frames, from: .mic)
+                }
             }
+        } catch {
+            dependencies.diagnosticSink(.microphoneStartFailed(error.localizedDescription))
+            throw error
         }
 
+        dependencies.diagnosticSink(.microphoneStartSucceeded)
         self.micCaptureManager = micCaptureManager
         self.activeSources.insert(.mic)
     }
@@ -397,31 +417,38 @@ final class RecordingController: ObservableObject {
             ])
         }
 
-        let systemAudioCaptureManager = SystemAudioCaptureManager()
-        try await systemAudioCaptureManager.start(
-            onFrames: { [weak self] frames in
-                do {
-                    try writer.write(frames: frames)
-                } catch {
-                    Task { [weak self] in
-                        await self?.handleSourceFailure(.system, message: error.localizedDescription)
+        let systemAudioCaptureManager = dependencies.makeSystemAudioCaptureManager()
+        dependencies.diagnosticSink(.systemAudioStartBegan)
+        do {
+            try await systemAudioCaptureManager.start(
+                onFrames: { [weak self] frames in
+                    do {
+                        try writer.write(frames: frames)
+                    } catch {
+                        Task { [weak self] in
+                            await self?.handleSourceFailure(.system, message: error.localizedDescription)
+                        }
+                        return
                     }
-                    return
-                }
 
-                guard let self else { return }
-                Task { @MainActor in
-                    self.noteIncomingFrames(frames, from: .system)
+                    guard let self else { return }
+                    Task { @MainActor in
+                        self.noteIncomingFrames(frames, from: .system)
+                    }
+                },
+                onFailure: { [weak self] message in
+                    guard let self else { return }
+                    Task {
+                        await self.handleSourceFailure(.system, message: message)
+                    }
                 }
-            },
-            onFailure: { [weak self] message in
-                guard let self else { return }
-                Task {
-                    await self.handleSourceFailure(.system, message: message)
-                }
-            }
-        )
+            )
+        } catch {
+            dependencies.diagnosticSink(.systemAudioStartFailed(error.localizedDescription))
+            throw error
+        }
 
+        dependencies.diagnosticSink(.systemAudioStartSucceeded)
         self.systemAudioCaptureManager = systemAudioCaptureManager
         self.activeSources.insert(.system)
     }
@@ -442,6 +469,7 @@ final class RecordingController: ObservableObject {
             return
         }
 
+        dependencies.diagnosticSink(.sourceFailed(source, message))
         await stopSource(source)
         activeSources.remove(source)
 

@@ -1,16 +1,22 @@
 import Foundation
 
 struct OpenAIStreamFunctionCallMetadata: Equatable, Sendable {
-    let callID: String
+    let callID: String?
     let itemID: String?
     let outputIndex: Int?
     let sequenceNumber: Int?
 }
 
+struct OpenAIStreamFunctionCallIdentity: Equatable, Sendable {
+    let metadata: OpenAIStreamFunctionCallMetadata
+    let name: String?
+}
+
 enum OpenAIStreamEvent: Equatable, Sendable {
     case textDelta(String)
+    case functionCallItemAdded(OpenAIStreamFunctionCallIdentity)
     case functionArgumentsDelta(OpenAIStreamFunctionCallMetadata, String)
-    case functionCallCompleted(OpenAIStreamFunctionCallMetadata, name: String, arguments: String)
+    case functionCallCompleted(OpenAIStreamFunctionCallIdentity, arguments: String)
     case completed(responseID: String?)
     case failed(String)
 }
@@ -65,6 +71,9 @@ struct OpenAIResponsesStreamParser {
             }
 
             if let field = fieldValue(in: line, named: "event") {
+                if currentEventName != nil || !dataLines.isEmpty {
+                    try flushCurrentEvent()
+                }
                 currentEventName = field
                 continue
             }
@@ -82,6 +91,19 @@ struct OpenAIResponsesStreamParser {
         switch name {
         case "response.output_text.delta":
             return .textDelta(try decodeStringField(named: "delta", in: payload, event: name))
+        case "response.output_item.added":
+            let object = try requiredJSONObject(from: payload, event: name)
+            let item = functionCallItem(from: object)
+            guard item["type"] as? String == "function_call" else {
+                return nil
+            }
+
+            return .functionCallItemAdded(
+                OpenAIStreamFunctionCallIdentity(
+                    metadata: try decodeFunctionCallMetadata(from: object, event: name),
+                    name: decodeOptionalStringField(named: "name", from: item)
+                )
+            )
         case "response.function_call_arguments.delta":
             let object = try requiredJSONObject(from: payload, event: name)
             return .functionArgumentsDelta(
@@ -90,10 +112,13 @@ struct OpenAIResponsesStreamParser {
             )
         case "response.function_call_arguments.done":
             let object = try requiredJSONObject(from: payload, event: name)
+            let item = functionCallItem(from: object)
             return .functionCallCompleted(
-                try decodeFunctionCallMetadata(from: object, event: name),
-                name: try decodeStringField(named: "name", from: object, event: name),
-                arguments: try decodeStringField(named: "arguments", from: object, event: name)
+                OpenAIStreamFunctionCallIdentity(
+                    metadata: try decodeFunctionCallMetadata(from: object, event: name),
+                    name: decodeOptionalStringField(named: "name", from: item)
+                ),
+                arguments: try decodeStringField(named: "arguments", from: item, event: name)
             )
         case "response.completed":
             let object = try jsonObject(from: payload, event: name)
@@ -107,15 +132,32 @@ struct OpenAIResponsesStreamParser {
 
     private func decodeFunctionCallMetadata(
         from object: [String: Any],
-        event: String
+        event: String,
+        requireCallID: Bool = false
     ) throws -> OpenAIStreamFunctionCallMetadata {
-        OpenAIStreamFunctionCallMetadata(
-            callID: try decodeStringField(named: "call_id", from: object, event: event),
-            itemID: object["item_id"] as? String,
-            outputIndex: decodeIntField(named: "output_index", from: object),
+        let item = functionCallItem(from: object)
+        let callID = (item["call_id"] as? String) ?? (object["call_id"] as? String)
+
+        if requireCallID, callID == nil {
+            throw OpenAIResponsesStreamParseError.missingRequiredField(event: event, field: "call_id")
+        }
+
+        return OpenAIStreamFunctionCallMetadata(
+            callID: callID,
+            itemID: (item["id"] as? String) ?? (item["item_id"] as? String) ?? (object["item_id"] as? String),
+            outputIndex: decodeIntField(named: "output_index", from: object)
+                ?? decodeIntField(named: "output_index", from: item),
             sequenceNumber: decodeIntField(named: "sequence_number", from: object)
                 ?? decodeIntField(named: "content_index", from: object)
         )
+    }
+
+    private func functionCallItem(from object: [String: Any]) -> [String: Any] {
+        if let item = object["item"] as? [String: Any] {
+            return item
+        }
+
+        return object
     }
 
     private func decodeStringField(named field: String, in payload: String, event: String) throws -> String {
@@ -128,11 +170,15 @@ struct OpenAIResponsesStreamParser {
         from object: [String: Any],
         event: String
     ) throws -> String {
-        guard let value = object[field] as? String else {
+        guard let value = decodeOptionalStringField(named: field, from: object) else {
             throw OpenAIResponsesStreamParseError.missingRequiredField(event: event, field: field)
         }
 
         return value
+    }
+
+    private func decodeOptionalStringField(named field: String, from object: [String: Any]) -> String? {
+        object[field] as? String
     }
 
     private func decodeIntField(named field: String, from object: [String: Any]) -> Int? {

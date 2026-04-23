@@ -61,14 +61,17 @@ func makeTaskAnalysisController(processInfo: ProcessInfo = .processInfo) -> Task
 
 func makeTaskPrepController(processInfo: ProcessInfo = .processInfo) -> TaskPrepController {
     let service: any TaskPrepConversationServicing
+    let handoffLauncher: any TaskPrepAgentHandoffLaunching
 
     if processInfo.arguments.contains("--heed-ui-test") {
         service = TaskPrepFixtureConversationService(processInfo: processInfo)
+        handoffLauncher = TaskPrepNoopHandoffLauncher()
     } else {
         service = OpenAITaskPrepConversationService()
+        handoffLauncher = TaskPrepTerminalHandoffLauncher()
     }
 
-    return TaskPrepController(service: service)
+    return TaskPrepController(service: service, handoffLauncher: handoffLauncher)
 }
 
 #Preview {

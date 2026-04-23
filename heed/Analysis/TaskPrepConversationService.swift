@@ -172,20 +172,27 @@ final class OpenAITaskPrepConversationService: TaskPrepConversationServicing {
 
     private struct PendingTranscriptRequest {
         let request: TaskPrepTranscriptRequest
-        let metadata: OpenAIStreamFunctionCallMetadata
+        let callID: String
     }
 
-    private struct QueuedTranscriptOutput {
+    private struct QueuedFunctionOutput {
         let callID: String
         let output: String
     }
 
     private struct ActiveStream {
+        struct FunctionCallRecord {
+            let metadata: OpenAIStreamFunctionCallMetadata
+            let name: String?
+        }
+
         let continuation: AsyncThrowingStream<TaskPrepConversationEvent, Error>.Continuation
         var streamTask: Task<Void, Never>?
         var currentStreamID: UUID?
         var pendingTranscriptRequest: PendingTranscriptRequest?
-        var queuedTranscriptOutput: QueuedTranscriptOutput?
+        var queuedFunctionOutputs: [QueuedFunctionOutput] = []
+        var functionCallRecordByItemID: [String: FunctionCallRecord] = [:]
+        var functionCallRecordByOutputIndex: [Int: FunctionCallRecord] = [:]
         var terminalEventReceived = false
         var isStreaming = false
     }
@@ -240,12 +247,15 @@ final class OpenAITaskPrepConversationService: TaskPrepConversationServicing {
             return
         }
 
-        stream.queuedTranscriptOutput = QueuedTranscriptOutput(
-            callID: pendingRequest.metadata.callID,
+        stream.pendingTranscriptRequest = nil
+        stream.queuedFunctionOutputs.append(
+            QueuedFunctionOutput(
+            callID: pendingRequest.callID,
             output: Self.transcriptToolOutput(scope: scope, session: session)
         )
+        )
         activeStream = stream
-        continueWithQueuedTranscriptOutputIfPossible()
+        continueWithQueuedToolOutputsIfPossible()
     }
 
     private func makeStreamedTurn(
@@ -321,19 +331,51 @@ final class OpenAITaskPrepConversationService: TaskPrepConversationServicing {
         case let .textDelta(delta):
             streamState.continuation.yield(.assistantTextDelta(delta))
             activeStream = streamState
-        case .functionArgumentsDelta:
+        case let .functionCallItemAdded(identity):
+            rememberFunctionCallIdentity(identity, in: &streamState)
             activeStream = streamState
-        case let .functionCallCompleted(metadata, name, arguments):
+        case let .functionArgumentsDelta(metadata, _):
+            rememberFunctionCallMetadata(metadata, in: &streamState)
+            activeStream = streamState
+        case let .functionCallCompleted(identity, arguments):
             do {
+                let resolvedIdentity = resolvedFunctionCallIdentity(from: identity, in: streamState)
+                rememberFunctionCallIdentity(resolvedIdentity, in: &streamState)
+
+                guard let name = resolvedIdentity.name else {
+                    throw OpenAIResponsesStreamParseError.missingRequiredField(
+                        event: "response.function_call_arguments.done",
+                        field: "name"
+                    )
+                }
+
                 if let toolEvent = try decodeToolEvent(name: name, arguments: arguments) {
                     switch toolEvent {
                     case let .transcriptToolRequest(request):
+                        guard let callID = resolvedIdentity.metadata.callID else {
+                            throw OpenAITaskPrepConversationServiceError.failedTurn(
+                                "Streamed tool call was missing call_id."
+                            )
+                        }
+
                         streamState.pendingTranscriptRequest = PendingTranscriptRequest(
                             request: request,
-                            metadata: metadata
+                            callID: callID
                         )
                         streamState.continuation.yield(toolEvent)
-                    case .contextDraft, .spawnAgentRequest:
+                    case .contextDraft:
+                        try queueToolOutput(
+                            callID: resolvedIdentity.metadata.callID,
+                            output: Self.contextDraftToolOutput(),
+                            in: &streamState
+                        )
+                        streamState.continuation.yield(toolEvent)
+                    case let .spawnAgentRequest(request):
+                        try queueToolOutput(
+                            callID: resolvedIdentity.metadata.callID,
+                            output: Self.spawnAgentToolOutput(reason: request.reason),
+                            in: &streamState
+                        )
                         streamState.continuation.yield(toolEvent)
                     default:
                         break
@@ -354,8 +396,8 @@ final class OpenAITaskPrepConversationService: TaskPrepConversationServicing {
                 conversationContext?.lastResponseID = responseID
             }
 
-            if streamState.queuedTranscriptOutput != nil {
-                continueWithQueuedTranscriptOutputIfPossible()
+            if !streamState.queuedFunctionOutputs.isEmpty {
+                continueWithQueuedToolOutputsIfPossible()
                 return
             }
 
@@ -371,26 +413,119 @@ final class OpenAITaskPrepConversationService: TaskPrepConversationServicing {
         }
     }
 
-    private func continueWithQueuedTranscriptOutputIfPossible() {
+    private func rememberFunctionCallMetadata(
+        _ metadata: OpenAIStreamFunctionCallMetadata,
+        in streamState: inout ActiveStream
+    ) {
+        rememberFunctionCallIdentity(
+            OpenAIStreamFunctionCallIdentity(metadata: metadata, name: nil),
+            in: &streamState
+        )
+    }
+
+    private func rememberFunctionCallIdentity(
+        _ identity: OpenAIStreamFunctionCallIdentity,
+        in streamState: inout ActiveStream
+    ) {
+        let matchedRecord =
+            identity.metadata.itemID.flatMap { streamState.functionCallRecordByItemID[$0] }
+            ?? identity.metadata.outputIndex.flatMap { streamState.functionCallRecordByOutputIndex[$0] }
+
+        let record = ActiveStream.FunctionCallRecord(
+            metadata: OpenAIStreamFunctionCallMetadata(
+                callID: identity.metadata.callID ?? matchedRecord?.metadata.callID,
+                itemID: identity.metadata.itemID ?? matchedRecord?.metadata.itemID,
+                outputIndex: identity.metadata.outputIndex ?? matchedRecord?.metadata.outputIndex,
+                sequenceNumber: identity.metadata.sequenceNumber ?? matchedRecord?.metadata.sequenceNumber
+            ),
+            name: identity.name ?? matchedRecord?.name
+        )
+
+        if let itemID = record.metadata.itemID {
+            streamState.functionCallRecordByItemID[itemID] = record
+        }
+
+        if let outputIndex = record.metadata.outputIndex {
+            streamState.functionCallRecordByOutputIndex[outputIndex] = record
+        }
+    }
+
+    private func resolvedFunctionCallIdentity(
+        from identity: OpenAIStreamFunctionCallIdentity,
+        in streamState: ActiveStream
+    ) -> OpenAIStreamFunctionCallIdentity {
+        let resolvedMetadata = resolvedFunctionCallMetadata(from: identity.metadata, in: streamState)
+        let matchedRecord =
+            resolvedMetadata.itemID.flatMap { streamState.functionCallRecordByItemID[$0] }
+            ?? resolvedMetadata.outputIndex.flatMap { streamState.functionCallRecordByOutputIndex[$0] }
+
+        return OpenAIStreamFunctionCallIdentity(
+            metadata: resolvedMetadata,
+            name: identity.name ?? matchedRecord?.name
+        )
+    }
+
+    private func resolvedFunctionCallMetadata(
+        from metadata: OpenAIStreamFunctionCallMetadata,
+        in streamState: ActiveStream
+    ) -> OpenAIStreamFunctionCallMetadata {
+        guard metadata.callID == nil else {
+            return metadata
+        }
+
+        let matchedRecord =
+            metadata.itemID.flatMap { streamState.functionCallRecordByItemID[$0] }
+            ?? metadata.outputIndex.flatMap { streamState.functionCallRecordByOutputIndex[$0] }
+
+        guard let matchedRecord else {
+            return metadata
+        }
+
+        return OpenAIStreamFunctionCallMetadata(
+            callID: matchedRecord.metadata.callID,
+            itemID: metadata.itemID ?? matchedRecord.metadata.itemID,
+            outputIndex: metadata.outputIndex ?? matchedRecord.metadata.outputIndex,
+            sequenceNumber: metadata.sequenceNumber ?? matchedRecord.metadata.sequenceNumber
+        )
+    }
+
+    private func queueToolOutput(
+        callID: String?,
+        output: String,
+        in streamState: inout ActiveStream
+    ) throws {
+        guard let callID else {
+            throw OpenAITaskPrepConversationServiceError.failedTurn(
+                "Streamed tool call was missing call_id."
+            )
+        }
+
+        streamState.queuedFunctionOutputs.append(
+            QueuedFunctionOutput(callID: callID, output: output)
+        )
+    }
+
+    private func continueWithQueuedToolOutputsIfPossible() {
         guard var streamState = activeStream,
               let previousResponseID = conversationContext?.lastResponseID,
               !streamState.isStreaming,
-              let queuedTranscriptOutput = streamState.queuedTranscriptOutput else {
+              streamState.pendingTranscriptRequest == nil,
+              !streamState.queuedFunctionOutputs.isEmpty else {
             return
         }
 
-        streamState.queuedTranscriptOutput = nil
-        streamState.pendingTranscriptRequest = nil
+        let queuedFunctionOutputs = streamState.queuedFunctionOutputs
+        streamState.queuedFunctionOutputs = []
         streamState.terminalEventReceived = false
         activeStream = streamState
 
         startStreaming(
-            inputItems: [
+            inputItems: queuedFunctionOutputs.map { queuedOutput in
                 Self.functionCallOutputItem(
-                    callID: queuedTranscriptOutput.callID,
-                    output: queuedTranscriptOutput.output
+                    callID: queuedOutput.callID,
+                    output: queuedOutput.output
                 )
-            ],
+            },
             previousResponseID: previousResponseID
         )
     }
@@ -443,10 +578,12 @@ final class OpenAITaskPrepConversationService: TaskPrepConversationServicing {
 
     private static let systemPrompt = """
     You help turn one meeting task into clear implementation context.
-    Stream short assistant updates as you think.
     Use the transcript tool when you need more meeting detail.
     Use the context draft tool when you have a better structured draft to share.
     Use the spawn agent tool only when the user clearly approved it.
+    If you need missing information from the user, ask only the direct question in chat.
+    Do not narrate your process or mention internal tools.
+    Keep the chat natural and concise while the draft keeps improving in the background.
     """
 
     private static func initialInputItems(for input: TaskPrepTurnInput) -> [[String: Any]] {
@@ -547,6 +684,7 @@ final class OpenAITaskPrepConversationService: TaskPrepConversationServicing {
                                 "label": ["type": "string"],
                                 "excerpt": ["type": "string"],
                                 "segmentIDs": [
+                                    "description": "Use transcript segment UUID strings from get_meeting_transcript when available. Otherwise return an empty array.",
                                     "type": "array",
                                     "items": ["type": "string"]
                                 ]
@@ -607,6 +745,14 @@ final class OpenAITaskPrepConversationService: TaskPrepConversationServicing {
         """
     }
 
+    private static func contextDraftToolOutput() -> String {
+        "Context draft received."
+    }
+
+    private static func spawnAgentToolOutput(reason: String) -> String {
+        "Spawn request recorded and is waiting for explicit user approval. Reason: \(reason)"
+    }
+
     private static func functionCallOutputItem(callID: String, output: String) -> [String: Any] {
         [
             "type": "function_call_output",
@@ -631,7 +777,7 @@ final class OpenAITaskPrepConversationService: TaskPrepConversationServicing {
         session.segments.enumerated().map { index, segment in
             let start = Int(segment.startedAt.rounded(.down))
             let end = Int(segment.endedAt.rounded(.up))
-            return "\(index + 1). [\(segment.source.rawValue.uppercased()) \(start)s-\(end)s] \(segment.text.heedCollapsedWhitespace)"
+            return "\(index + 1). [SEGMENT_ID \(segment.id.uuidString)] [\(segment.source.rawValue.uppercased()) \(start)s-\(end)s] \(segment.text.heedCollapsedWhitespace)"
         }
         .joined(separator: "\n")
     }
@@ -670,17 +816,32 @@ private struct ContextDraftToolArguments: Decodable {
 }
 
 private struct ContextDraftEvidence: Decodable {
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case label
+        case excerpt
+        case segmentIDs
+    }
+
     let id: String
     let label: String
     let excerpt: String
-    let segmentIDs: [UUID]
+    private let rawSegmentIDs: [String]
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        label = try container.decode(String.self, forKey: .label)
+        excerpt = try container.decode(String.self, forKey: .excerpt)
+        rawSegmentIDs = try container.decode([String].self, forKey: .segmentIDs)
+    }
 
     var asEvidence: TaskPrepEvidence {
         TaskPrepEvidence(
             id: id,
             label: label,
             excerpt: excerpt,
-            segmentIDs: segmentIDs
+            segmentIDs: rawSegmentIDs.compactMap(UUID.init(uuidString:))
         )
     }
 }

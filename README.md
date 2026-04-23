@@ -4,7 +4,7 @@ Heed is a macOS app for local meeting transcription and task prep. It captures m
 
 Today, the repo contains a real first v1 path. The app has a transcript-first window, a collapsible sessions sidebar, a floating record or stop button, local permission gating, separate source capture files, batch transcription after stop, Whisper-backed local transcription through a bundled helper tool, JSON session autosave, relaunch recovery, clipboard copy, a Keychain-backed OpenAI API key setting, a `Compile tasks` flow, and a split task-prep workspace that opens from `Prepare context`.
 
-The prep workspace has two panes. The left side is a chat thread with streamed GPT-5.4 replies [replies that arrive in small pieces while they are generated]. The right side is a context brief panel that pins a stable structured draft after each completed turn. The model can ask for more transcript detail through a read-only `get_meeting_transcript` tool that is scoped to the selected session. If the model asks to spawn an agent, the app blocks that request until the user gives explicit approval. The prep chat and prep brief do not persist [stay saved] to disk.
+The prep workspace has two panes. The left side is a chat thread with streamed GPT-5.4 replies [replies that arrive in small pieces while they are generated]. The right side is a context brief panel that pins a stable structured draft after each completed turn. The model can ask for more transcript detail through a read-only `get_meeting_transcript` tool that is scoped to the selected session. If the model asks to spawn an agent, the app blocks that request until the user gives explicit approval, then opens Terminal and starts a `codex` handoff with the approved brief, prep chat, open questions, and full session transcript. The prep chat and prep brief do not persist [stay saved] to disk.
 
 ## What Exists Today
 
@@ -27,7 +27,7 @@ Important current facts:
 - `Compile tasks` stays inline below the transcript. `Prepare context` opens the split prep workspace.
 - The left prep pane shows streamed assistant turns and follow-up input. The right prep pane shows a fixed context brief with summary, goal, constraints, acceptance, risks, open questions, evidence, and spawn approval state.
 - The transcript tool reads only from the selected session and returns formatted transcript lines when the model asks for them.
-- Spawn stays blocked until the user clicks `Approve spawn`. The current shipped UI records that approval state, but it does not launch a final external handoff yet.
+- Spawn stays blocked until the user clicks `Approve spawn`. A successful approval now opens Terminal and starts `codex` immediately with the approved task brief, prep chat, unresolved questions, and full transcript context.
 - Prep chat state is memory-only. Closing the workspace, switching sessions, or preparing a different task resets it.
 - The bottom utility rail keeps the record button centered, puts a fullscreen toggle on the left, and keeps `Set API key` plus `Copy text` on the right. It also shows `Compile tasks` when the selected session is eligible.
 - The project uses generated Info.plist values, not a checked-in `Info.plist`.
@@ -68,7 +68,7 @@ The current near-term product path in this repo is:
 2. Improve real-world capture robustness across device changes.
 3. Tune post-stop Whisper latency for long sessions.
 4. Keep the task-prep workspace clear about what is temporary and what is saved.
-5. Decide how an approved spawn request should turn into a real external handoff.
+5. Refine the approved spawn handoff so launch failures and working-directory setup feel clearer.
 6. Add more manual smoke coverage for meeting apps and the prep workspace.
 7. Harden recovery and interruption behavior across both capture and streaming prep turns.
 

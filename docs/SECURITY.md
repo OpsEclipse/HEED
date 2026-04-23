@@ -61,9 +61,18 @@
 - Risk:
   An automated handoff could start follow-on work the user did not approve.
 - Current posture:
-  The task-prep prompt tells the model to use `spawn_agent` only after clear approval, and app code separately blocks the request until the user clicks `Approve spawn`.
+  The task-prep prompt tells the model to use `spawn_agent` only after clear approval, and app code separately blocks the request until the user clicks `Approve spawn`. After approval, the app launches Terminal and starts `codex` with an in-memory brief built from the approved prep state, including the stable brief, prep chat, open questions, and full session transcript.
 - Guardrail:
   Keep both checks. Prompt rules alone are not a strong enough control.
+
+## Terminal Automation
+
+- Risk:
+  Driving Terminal uses Apple Events [macOS app-to-app automation messages], which adds another permission surface and could expose prep context to another app.
+- Current posture:
+  Heed requests Terminal automation only after the user explicitly approves a spawn handoff. The app launches `codex` with a short Terminal command, then pastes the in-memory brief through `System Events` so it does not need a temp script file on disk.
+- Guardrail:
+  Keep the automation prompt tied to the same explicit spawn approval, and do not switch to a disk-backed temp-file launch without a fresh privacy review.
 
 ## No Prep Persistence
 
@@ -99,11 +108,12 @@ Real security-relevant facts from the project today:
 - App Sandbox is enabled.
 - Hardened Runtime is enabled.
 - Generated Info.plist is enabled.
-- Privacy usage strings for microphone, screen capture, and system audio are present in build settings.
-- The checked-in entitlements file enables App Sandbox, microphone input, and outbound network access. Screen recording uses the macOS privacy prompt flow here, not a separate checked-in entitlement.
+- Privacy usage strings for microphone, screen capture, system audio, and Apple Events sending are present in build settings.
+- The checked-in entitlements file enables App Sandbox, Apple Events automation, microphone input, and outbound network access. Screen recording uses the macOS privacy prompt flow here, not a separate checked-in entitlement.
 - The app has a network client for explicit OpenAI task-analysis and task-prep calls.
 - Transcript storage lives under Application Support.
 - Prep chat history and prep briefs are not written to Application Support.
+- The spawn handoff sends an in-memory brief to Terminal after approval instead of writing a temporary script file.
 - The Whisper model download URL is `https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin`.
 - The current docs record the downloaded model checksum as `a03779c86df3323075f5e796cb2ce5029f00ec8869eee3fdfb897afe36c6d002`, but the build step does not enforce that checksum yet.
 
@@ -112,6 +122,7 @@ Real security-relevant facts from the project today:
 - Screen recording is still a broad permission and needs careful user explanation.
 - Export can move sensitive text outside the app sandbox.
 - The OpenAI task path sends transcript text over the network, so the user-triggered boundary must stay clear.
+- Terminal automation adds a second explicit permission boundary, so the app should stay clear that it is about to start Codex in Terminal.
 - The transcript tool must stay scoped to the selected session and must not expand into global transcript search without a fresh security review.
 - API key handling depends on Keychain staying the only secret store.
 - The build-time model download should still add explicit checksum verification in code, not docs alone.
@@ -127,4 +138,4 @@ The repo now has the main product-specific controls in place for the shipped tas
 - Do not add silent background uploads of audio or transcript content.
 - Document every new permission, saved-data path, export path, and task-prep tool in this file.
 - Treat API keys as secrets and keep them in Keychain or an equally strong system store.
-- If the app ever turns the current ready-to-spawn state into a real external handoff, keep the explicit approval gate in app code and not only in the model prompt.
+- Keep the explicit approval gate in app code and not only in the model prompt before launching Terminal for Codex.

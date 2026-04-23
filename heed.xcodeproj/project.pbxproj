@@ -428,6 +428,7 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readwrite;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSAppleEventsUsageDescription = "Heed needs Terminal access only after you approve starting Codex for a task handoff.";
 				INFOPLIST_KEY_NSAudioCaptureUsageDescription = "Heed needs system audio capture to transcribe other people in the meeting.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Heed needs microphone access to transcribe what you say in the meeting.";
@@ -465,6 +466,7 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readwrite;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSAppleEventsUsageDescription = "Heed needs Terminal access only after you approve starting Codex for a task handoff.";
 				INFOPLIST_KEY_NSAudioCaptureUsageDescription = "Heed needs system audio capture to transcribe other people in the meeting.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Heed needs microphone access to transcribe what you say in the meeting.";
