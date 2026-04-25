@@ -37,12 +37,12 @@ The app now has a shared domain model, microphone capture, system-audio capture,
 These are real project settings today.
 
 - macOS deployment target: `14.0`
-- App Sandbox [a macOS restriction layer]: enabled
+- App Sandbox [a macOS restriction layer]: disabled for the current developer build so the integrated Codex terminal can start local tools and work in the checked-out repo
 - Hardened Runtime [extra macOS runtime protections]: enabled
 - Generated Info.plist: enabled
 - Default Swift actor isolation [the thread-safety rule Swift uses for code access]: `MainActor`
 - Privacy usage strings for microphone, screen capture, and system audio: present
-- Checked-in entitlements: App Sandbox, microphone input, and outbound network client access; screen recording still relies on the macOS permission flow instead of a separate entitlement
+- Checked-in entitlements: Apple Events automation, microphone input, and outbound network client access; screen recording still relies on the macOS permission flow instead of a separate entitlement
 - User-selected file write access for exports: enabled
 
 Those settings live in [`../heed.xcodeproj/project.pbxproj`](../heed.xcodeproj/project.pbxproj).
@@ -66,11 +66,11 @@ The current product pipeline has two big paths.
 7. `TaskAnalysisController`
    Runs the first OpenAI pass only after the user clicks `Compile tasks`. This pass returns grouped tasks with the types `Feature`, `Bug fix`, and `Miscellaneous`.
 8. `TaskPrepController`
-   Owns the second pass after the user clicks `Prepare context`. It tracks chat messages, streamed turn state, a pending brief, a stable brief, the spawn approval state for one selected task, and the final handoff launch after approval.
+   Owns the second pass after the user clicks `Prepare context`. It tracks chat messages, streamed turn state, a pending brief, a stable brief, the spawn approval state for one selected task, and the integrated terminal state after approval.
 9. `OpenAITaskPrepConversationService`
    Uses the Responses API with streaming [a reply that arrives in small pieces over one connection], reuses the previous response ID for follow-up turns, and exposes three tools: read-only `get_meeting_transcript`, `update_context_draft`, and guarded `spawn_agent`.
-10. `TaskPrepTerminalHandoffLauncher`
-    Builds a Codex prompt from the selected task, stable brief, open questions, transcript evidence, full session transcript, and prep chat, then uses Apple Events [a macOS automation message between apps] to launch `codex` in Terminal and paste the approved brief through `System Events`.
+10. `TaskPrepTerminalSessionLauncher`
+    Builds a compressed Codex prompt from the selected task, stable brief, open questions, transcript evidence, and prep chat, then starts `codex` inside a PTY-backed terminal session [a real terminal interface for a child process] in the prep workspace.
 11. `WorkspaceShell`
     Shows the transcript-first shell by default, then swaps the main canvas to a split prep workspace while task prep is active.
 12. Export layer
@@ -80,12 +80,12 @@ The current product pipeline has two big paths.
 
 These boundaries matter for the shipped prep flow.
 
-- The chat pane owns streamed conversation display. It does not own network calls.
+- The chat pane owns streamed conversation display before spawn approval. After approval, the left pane switches to the integrated terminal.
 - The right-side brief panel renders controller state. It does not build the draft itself.
 - The prep service may read transcript text only through `get_meeting_transcript`.
 - The transcript tool must stay scoped to the selected session. It must not browse all saved sessions.
 - `update_context_draft` can update the pending brief during a turn, but the controller should pin that brief as stable only after the turn completes. When a stable brief already exists, the current panel keeps that stable brief visible and shows `Updating brief...` until the new turn finishes.
-- `spawn_agent` is advisory until the user approves it. After that click, the app builds a Codex handoff brief locally and launches Terminal immediately.
+- `spawn_agent` is advisory until the user approves it. After that click, the app builds a compressed Codex handoff locally and starts the integrated terminal.
 - Prep chat state is memory-only. It is not written into the saved transcript session format.
 
 ## Important Boundaries
@@ -112,7 +112,7 @@ These invariants [rules that should always stay true] are either already true or
 - If the product claims local transcription, raw meeting audio should not silently leave the machine.
 - The prep workspace must reset when the user closes it, switches sessions, or starts prep for a different task.
 - Prep chat messages and prep briefs must stay in memory until the team explicitly approves persistence work.
-- Spawn requests must stay blocked until the user explicitly approves them in the UI, and a successful approval must not persist the prep brief to disk just to launch Terminal.
+- Spawn requests must stay blocked until the user explicitly approves them in the UI, and a successful approval must not persist the prep brief or terminal output to disk.
 
 ## Cross-Cutting Concerns
 

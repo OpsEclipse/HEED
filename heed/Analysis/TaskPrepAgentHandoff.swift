@@ -36,14 +36,19 @@ struct TaskPrepAgentHandoffPromptBuilder {
         let acceptance = numberedLines(from: draft.acceptanceCriteria, emptyFallback: "No explicit acceptance criteria.")
         let risks = numberedLines(from: draft.risks, emptyFallback: "No explicit risks.")
         let openQuestions = numberedLines(from: draft.openQuestions, emptyFallback: "No open questions were captured.")
-        let evidence = evidenceLines(from: draft.evidence, transcriptSegments: transcriptSegments, fallback: taskEvidence)
+        let evidence = evidenceLines(
+            from: draft.evidence,
+            transcriptSegments: transcriptSegments,
+            fallback: taskEvidence,
+            fallbackSegmentIDs: task.evidenceSegmentIDs
+        )
         let conversation = conversationLines(from: messages)
-        let transcript = transcriptLines(from: transcriptSegments)
 
         return """
-        Start working on this task in the current Codex session.
+        Compressed handoff
         The user already approved the handoff. Begin the work end-to-end.
-        Use the full context below. Treat the summary as compressed guidance and the transcript as the fuller source of truth.
+        Use this concise packet as the source of truth for the initial pass.
+        The complete meeting transcript remains in Heed and is not pasted here by default.
 
         Task
         Title: \(task.title.heedCollapsedWhitespace)
@@ -73,9 +78,6 @@ struct TaskPrepAgentHandoffPromptBuilder {
 
         Prep conversation
         \(conversation)
-
-        Full transcript
-        \(transcript)
         """
     }
 
@@ -106,15 +108,25 @@ struct TaskPrepAgentHandoffPromptBuilder {
     private nonisolated static func evidenceLines(
         from evidence: [TaskPrepEvidence],
         transcriptSegments: [TranscriptSegment],
-        fallback: String
+        fallback: String,
+        fallbackSegmentIDs: [UUID]
     ) -> String {
-        guard !evidence.isEmpty else {
-            return "1. \(fallback)"
+        let sessionSegmentByID = Dictionary(uniqueKeysWithValues: transcriptSegments.map { ($0.id, $0) })
+        let items: [TaskPrepEvidence]
+        if evidence.isEmpty {
+            items = [
+                TaskPrepEvidence(
+                    id: "task-evidence",
+                    label: "Task evidence",
+                    excerpt: fallback,
+                    segmentIDs: fallbackSegmentIDs
+                )
+            ]
+        } else {
+            items = evidence
         }
 
-        let sessionSegmentByID = Dictionary(uniqueKeysWithValues: transcriptSegments.map { ($0.id, $0) })
-
-        return evidence.enumerated().map { index, item in
+        return items.prefix(6).enumerated().map { index, item in
             let quotedExcerpt = cleanedLine(item.excerpt) ?? "No excerpt."
             let segmentContext = item.segmentIDs
                 .compactMap { sessionSegmentByID[$0] }
@@ -144,7 +156,9 @@ struct TaskPrepAgentHandoffPromptBuilder {
             return "1. No prep chat history."
         }
 
-        return visibleMessages.enumerated().map { index, message in
+        let maxMessages = 6
+        let displayedMessages = visibleMessages.suffix(maxMessages)
+        var lines = displayedMessages.enumerated().map { index, message in
             let role: String
             switch message.role {
             case .assistant:
@@ -156,22 +170,24 @@ struct TaskPrepAgentHandoffPromptBuilder {
             }
 
             let interruptionSuffix = message.isInterrupted ? " [interrupted]" : ""
-            return "\(index + 1). \(role)\(interruptionSuffix): \(message.text.heedCollapsedWhitespace)"
+            return "\(index + 1). \(role)\(interruptionSuffix): \(shortened(message.text.heedCollapsedWhitespace, limit: 240))"
         }
-        .joined(separator: "\n")
+
+        let omittedCount = visibleMessages.count - displayedMessages.count
+        if omittedCount > 0 {
+            lines.insert("\(omittedCount) earlier prep message(s) omitted.", at: 0)
+        }
+
+        return lines.joined(separator: "\n")
     }
 
-    private nonisolated static func transcriptLines(from transcriptSegments: [TranscriptSegment]) -> String {
-        guard !transcriptSegments.isEmpty else {
-            return "1. No transcript segments were available."
+    private nonisolated static func shortened(_ value: String, limit: Int) -> String {
+        guard value.count > limit else {
+            return value
         }
 
-        return transcriptSegments.enumerated().map { index, segment in
-            let start = Int(segment.startedAt.rounded(.down))
-            let end = Int(segment.endedAt.rounded(.up))
-            return "\(index + 1). [\(segment.source.rawValue.uppercased()) \(start)s-\(end)s] \(segment.text.heedCollapsedWhitespace)"
-        }
-        .joined(separator: "\n")
+        let endIndex = value.index(value.startIndex, offsetBy: limit)
+        return "\(value[..<endIndex])..."
     }
 }
 
@@ -221,6 +237,12 @@ struct TaskPrepTerminalHandoffLauncher: TaskPrepAgentHandoffLaunching {
 
     private var terminalLaunchSource: String {
         """
+        tell application "Terminal" to launch
+        set launchDeadline to (current date) + 5
+        repeat until application "Terminal" is running
+            if (current date) > launchDeadline then error "Terminal did not finish launching."
+            delay 0.1
+        end repeat
         tell application "Terminal"
             activate
             do script "codex"

@@ -46,6 +46,29 @@ struct TaskPrepPresentationTests {
 
         #expect(bubble.usesContentWidth == true)
     }
+
+    @Test func latestStreamingAssistantMessageShowsLoadingIndicator() {
+        let bubble = TaskPrepMessageBubble(
+            message: TaskPrepMessage(role: .assistant, text: "Drafting the handoff"),
+            isLatestStreamingAssistant: true
+        )
+
+        #expect(bubble.showsLoadingIndicator == true)
+    }
+
+    @Test func workspaceShowsTerminalAfterSpawnLaunches() {
+        let controller = TaskPrepController(service: TaskPrepPresentationServiceStub())
+        controller.start(task: samplePresentationTask(), in: samplePresentationSession())
+
+        let workspace = TaskPrepWorkspaceView(
+            controller: controller,
+            onClose: {}
+        )
+
+        #expect(workspace.shouldShowTerminal(for: .idle) == false)
+        #expect(workspace.shouldShowTerminal(for: .running) == true)
+        #expect(workspace.shouldShowTerminal(for: .failed("codex was not found.")) == true)
+    }
 }
 
 private struct TaskPrepPresentationServiceStub: TaskPrepConversationServicing {

@@ -117,15 +117,16 @@ The transcript review flow stays in the same reading surface.
 - The sidebar toggle still stays available in the shell chrome.
 - A close button in the right panel resets prep state and returns the shell to the transcript canvas.
 
-### Left Prep Chat
+### Left Prep Chat And Terminal
 
-The chat pane is the live conversation surface.
+The left pane is the live conversation surface before spawn approval. After approval, it becomes the integrated Codex terminal.
 
 - It shows the selected task title at the top.
 - It shows streamed GPT-5.4 replies as text deltas [small text pieces that arrive one after another].
 - It shows user follow-up messages between assistant turns.
 - The input row stays disabled while a turn is streaming.
 - Interrupted turns keep their partial text and mark the assistant bubble as interrupted.
+- After a successful spawn approval, it shows terminal output and a terminal input row.
 
 ### Right Context Brief Panel
 
@@ -138,7 +139,7 @@ The right pane is the stable handoff draft.
 - It shows `Updating brief...` when a new draft arrives during a later turn.
 - It includes a `Spawn approval` section that explains whether the model has asked to spawn and whether the user approved it.
 - It shows `Approve spawn` only when a spawn request is blocked waiting for approval.
-- A successful approval launches Terminal and starts `codex` immediately, then removes the spawn section instead of showing extra success chrome [extra UI whose only job is confirming success].
+- A successful approval starts the integrated Codex terminal in the left pane.
 - If that handoff fails, the section stays visible and offers `Retry spawn`.
 
 ## Current Interaction Pattern
@@ -163,8 +164,8 @@ The right pane is the stable handoff draft.
 18. If the model asks for more evidence, the service uses a read-only transcript tool for the selected session only.
 19. The right panel pins a stable brief after the turn completes.
 20. If the model asks to spawn, the right panel shows the approval request and the user can click `Approve spawn`.
-21. A successful approval opens Terminal and starts `codex` with the approved brief right away.
-22. Closing the workspace, switching sessions, or starting prep for another task clears the prep chat and brief because they are intentionally temporary.
+21. A successful approval turns the left pane into an integrated terminal and starts `codex` with a compressed handoff.
+22. Closing the workspace, switching sessions, or starting prep for another task clears the prep chat, brief, and terminal output because they are intentionally temporary.
 
 ## Current UI Behavior
 
@@ -212,10 +213,12 @@ The right pane is the stable handoff draft.
 
 - Open one prep workspace for one task at a time.
 - Stream assistant text into the left pane instead of waiting for one full message.
+- Switch the left pane into terminal mode after approved spawn.
 - Keep the latest stable brief visible on the right while a follow-up turn is in flight.
 - Do not persist the prep chat or prep brief to disk.
+- Do not persist terminal output to disk.
 - Keep spawn blocked until the user explicitly approves it.
-- Do not add extra success UI after the Terminal handoff starts. Failure states can stay visible because they need recovery.
+- Do not add extra success UI after the terminal starts. Failure states can stay visible because they need recovery.
 
 ## Current Modules
 

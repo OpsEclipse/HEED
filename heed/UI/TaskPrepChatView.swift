@@ -33,7 +33,10 @@ struct TaskPrepChatView: View {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 14) {
                         ForEach(controller.viewState.messages) { message in
-                            TaskPrepMessageBubble(message: message)
+                            TaskPrepMessageBubble(
+                                message: message,
+                                isLatestStreamingAssistant: isLatestStreamingAssistant(message)
+                            )
                                 .id(message.id)
                         }
                     }
@@ -152,10 +155,28 @@ struct TaskPrepChatView: View {
             proxy.scrollTo(latestMessageID, anchor: .bottom)
         }
     }
+
+    private func isLatestStreamingAssistant(_ message: TaskPrepMessage) -> Bool {
+        guard controller.viewState.turnState == .streaming,
+              message.role == .assistant else {
+            return false
+        }
+
+        return controller.viewState.messages.last(where: { $0.role == .assistant })?.id == message.id
+    }
 }
 
 struct TaskPrepMessageBubble: View {
     let message: TaskPrepMessage
+    let isLatestStreamingAssistant: Bool
+
+    init(
+        message: TaskPrepMessage,
+        isLatestStreamingAssistant: Bool = false
+    ) {
+        self.message = message
+        self.isLatestStreamingAssistant = isLatestStreamingAssistant
+    }
 
     var body: some View {
         VStack(alignment: horizontalAlignment, spacing: 6) {
@@ -163,11 +184,23 @@ struct TaskPrepMessageBubble: View {
                 .font(.system(size: 10, weight: .semibold, design: .monospaced))
                 .foregroundStyle(HeedTheme.ColorToken.textSecondary)
 
-            Text(message.text.isEmpty ? " " : message.text)
-                .font(.system(size: 14))
-                .foregroundStyle(HeedTheme.ColorToken.textPrimary)
-                .multilineTextAlignment(.leading)
-                .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: 8) {
+                if shouldShowMessageText {
+                    Text(displayedText)
+                        .font(.system(size: 14))
+                        .foregroundStyle(HeedTheme.ColorToken.textPrimary)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                if showsLoadingIndicator {
+                    ProgressView()
+                        .controlSize(.small)
+                        .tint(HeedTheme.ColorToken.actionYellow)
+                        .accessibilityLabel("Assistant response is loading")
+                        .accessibilityIdentifier("task-prep-assistant-loading")
+                }
+            }
                 .frame(maxWidth: usesContentWidth ? 560 : .infinity, alignment: .leading)
                 .padding(.horizontal, usesFlatChrome ? 0 : 14)
                 .padding(.vertical, usesFlatChrome ? 0 : 12)
@@ -194,6 +227,18 @@ struct TaskPrepMessageBubble: View {
 
     var usesContentWidth: Bool {
         message.role == .user
+    }
+
+    var showsLoadingIndicator: Bool {
+        message.role == .assistant && isLatestStreamingAssistant && !message.isInterrupted
+    }
+
+    private var shouldShowMessageText: Bool {
+        !message.text.isEmpty || !showsLoadingIndicator
+    }
+
+    private var displayedText: String {
+        message.text.isEmpty ? " " : message.text
     }
 
     private var roleLabel: String {

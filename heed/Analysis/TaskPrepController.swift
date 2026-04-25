@@ -6,11 +6,12 @@ final class TaskPrepController: ObservableObject {
     @Published private(set) var viewState = TaskPrepViewState()
 
     private let service: any TaskPrepConversationServicing
-    private let handoffLauncher: any TaskPrepAgentHandoffLaunching
+    private let terminalLauncher: any TaskPrepTerminalSessionLaunching
     private var activeSession: TranscriptSession?
     private var activeTask: CompiledTask?
     private var activeTurnTask: Task<Void, Never>?
     private var activeTurnID = UUID()
+    private var activeTerminalHandle: (any TaskPrepTerminalSessionHandle)?
 
     var activeTaskID: String? {
         activeTask?.id
@@ -21,15 +22,25 @@ final class TaskPrepController: ObservableObject {
     }
 
     convenience init(service: any TaskPrepConversationServicing) {
-        self.init(service: service, handoffLauncher: TaskPrepTerminalHandoffLauncher())
+        self.init(service: service, terminalLauncher: TaskPrepProcessTerminalSessionLauncher())
+    }
+
+    convenience init(
+        service: any TaskPrepConversationServicing,
+        handoffLauncher: any TaskPrepAgentHandoffLaunching
+    ) {
+        self.init(
+            service: service,
+            terminalLauncher: TaskPrepAgentHandoffTerminalSessionLauncher(handoffLauncher: handoffLauncher)
+        )
     }
 
     init(
         service: any TaskPrepConversationServicing,
-        handoffLauncher: any TaskPrepAgentHandoffLaunching
+        terminalLauncher: any TaskPrepTerminalSessionLaunching
     ) {
         self.service = service
-        self.handoffLauncher = handoffLauncher
+        self.terminalLauncher = terminalLauncher
     }
 
     func start(task: CompiledTask, in session: TranscriptSession) {
@@ -59,6 +70,10 @@ final class TaskPrepController: ObservableObject {
         )
     }
 
+    func sendTerminalInput(_ input: String) {
+        activeTerminalHandle?.write(input)
+    }
+
     func approveSpawn() {
         if viewState.pendingSpawnRequest != nil {
             launchApprovedSpawn()
@@ -70,6 +85,8 @@ final class TaskPrepController: ObservableObject {
 
     func reset() {
         cancelActiveTurn()
+        activeTerminalHandle?.stop()
+        activeTerminalHandle = nil
         activeTask = nil
         activeSession = nil
         viewState = TaskPrepViewState()
@@ -237,14 +254,42 @@ final class TaskPrepController: ObservableObject {
         )
 
         do {
+            activeTerminalHandle?.stop()
+            activeTerminalHandle = nil
             viewState.spawnStatus = .readyToSpawn
-            try handoffLauncher.launch(prompt: prompt)
+            viewState.terminalStatus = .launching
+            viewState.terminalOutput = "Starting Codex...\n"
+            activeTerminalHandle = try terminalLauncher.launch(
+                prompt: prompt,
+                onOutput: { [weak self] output in
+                    self?.appendTerminalOutput(output)
+                },
+                onExit: { [weak self] exitCode in
+                    self?.markTerminalEnded(exitCode: exitCode)
+                }
+            )
             viewState.spawnStatus = .launched
+            viewState.terminalStatus = .running
             viewState.pendingSpawnRequest = nil
         } catch {
             let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             viewState.spawnStatus = .launchFailed(message)
+            viewState.terminalStatus = .failed(message)
         }
+    }
+
+    private func appendTerminalOutput(_ output: String) {
+        viewState.terminalOutput.append(output)
+    }
+
+    private func markTerminalEnded(exitCode: Int32?) {
+        guard viewState.terminalStatus == .running || viewState.terminalStatus == .launching else {
+            return
+        }
+
+        viewState.terminalStatus = .ended(exitCode)
+        activeTerminalHandle?.stop()
+        activeTerminalHandle = nil
     }
 
     private func clearActiveTurnIfNeeded(_ turnID: UUID) {

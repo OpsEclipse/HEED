@@ -186,9 +186,9 @@ struct TaskPrepControllerTests {
 
     @Test func spawnRequestSucceedsAfterApproval() async throws {
         let service = ControlledTaskPrepConversationService()
-        let launcher = RecordingTaskPrepAgentHandoffLauncher()
+        let launcher = RecordingTaskPrepTerminalSessionLauncher()
         let controller = await MainActor.run {
-            TaskPrepController(service: service, handoffLauncher: launcher)
+            TaskPrepController(service: service, terminalLauncher: launcher)
         }
 
         await MainActor.run {
@@ -208,6 +208,7 @@ struct TaskPrepControllerTests {
 
         #expect(state.spawnStatus == .launched)
         #expect(state.pendingSpawnRequest == nil)
+        #expect(state.terminalStatus == .running)
         #expect(await MainActor.run(body: { launcher.prompts.count }) == 1)
     }
 
@@ -235,9 +236,9 @@ struct TaskPrepControllerTests {
 
     @Test func approveSpawnLaunchesCodexHandoffImmediatelyWhenRequestIsPending() async throws {
         let service = ControlledTaskPrepConversationService()
-        let launcher = RecordingTaskPrepAgentHandoffLauncher()
+        let launcher = RecordingTaskPrepTerminalSessionLauncher()
         let controller = await MainActor.run {
-            TaskPrepController(service: service, handoffLauncher: launcher)
+            TaskPrepController(service: service, terminalLauncher: launcher)
         }
         let draft = sampleDraft(summary: "Stable summary", goal: "Launch the agent handoff right away.")
 
@@ -266,13 +267,18 @@ struct TaskPrepControllerTests {
         #expect(launchedPrompt.contains("Stable summary"))
         #expect(launchedPrompt.contains("Launch the agent handoff right away."))
         #expect(launchedPrompt.contains("The implementation brief is ready for Codex."))
+
+        let state = await MainActor.run { controller.viewState }
+        #expect(state.spawnStatus == .launched)
+        #expect(state.pendingSpawnRequest == nil)
+        #expect(state.terminalStatus == .running)
     }
 
     @Test func approveSpawnUsesConversationHistoryInLaunchedBrief() async throws {
         let service = ControlledTaskPrepConversationService()
-        let launcher = RecordingTaskPrepAgentHandoffLauncher()
+        let launcher = RecordingTaskPrepTerminalSessionLauncher()
         let controller = await MainActor.run {
-            TaskPrepController(service: service, handoffLauncher: launcher)
+            TaskPrepController(service: service, terminalLauncher: launcher)
         }
         let draft = sampleDraft(summary: "Stable summary", goal: "Carry the prep conversation into Codex.")
 
@@ -314,6 +320,100 @@ struct TaskPrepControllerTests {
         #expect(launchedPrompt.contains("Include the transcript evidence and keep it concise."))
         #expect(launchedPrompt.contains("I updated the brief and I can spawn the agent now."))
         #expect(launchedPrompt.contains("Transcript evidence"))
+    }
+
+    @Test func approveSpawnFailureKeepsPendingRequestForRetry() async throws {
+        let service = ControlledTaskPrepConversationService()
+        let launcher = RecordingTaskPrepTerminalSessionLauncher(error: TaskPrepServiceStubError(message: "codex was not found."))
+        let controller = await MainActor.run {
+            TaskPrepController(service: service, terminalLauncher: launcher)
+        }
+
+        await MainActor.run {
+            controller.start(task: sampleTask(), in: sampleSession())
+        }
+
+        try await waitForPendingTurnCount(1, service: service)
+        service.completeNextTurn(with: [
+            .spawnAgentRequest(.init(reason: "ready")),
+            .completed
+        ])
+
+        _ = try await waitForPrepState(controller) { state in
+            state.turnState == .completed && state.pendingSpawnRequest != nil
+        }
+
+        await MainActor.run {
+            controller.approveSpawn()
+        }
+
+        let state = await MainActor.run { controller.viewState }
+        #expect(state.spawnStatus == .launchFailed("codex was not found."))
+        #expect(state.terminalStatus == .failed("codex was not found."))
+        #expect(state.pendingSpawnRequest == .init(reason: "ready"))
+    }
+
+    @Test func terminalOutputAppendsToViewState() async throws {
+        let service = ControlledTaskPrepConversationService()
+        let launcher = RecordingTaskPrepTerminalSessionLauncher()
+        let controller = await MainActor.run {
+            TaskPrepController(service: service, terminalLauncher: launcher)
+        }
+
+        await MainActor.run {
+            controller.start(task: sampleTask(), in: sampleSession())
+        }
+
+        try await waitForPendingTurnCount(1, service: service)
+        service.completeNextTurn(with: [
+            .spawnAgentRequest(.init(reason: "ready")),
+            .completed
+        ])
+
+        _ = try await waitForPrepState(controller) { state in
+            state.turnState == .completed && state.pendingSpawnRequest != nil
+        }
+
+        await MainActor.run {
+            controller.approveSpawn()
+            launcher.emitOutput("Codex is thinking.\n")
+        }
+
+        let state = await MainActor.run { controller.viewState }
+        #expect(state.terminalOutput.contains("Starting Codex..."))
+        #expect(state.terminalOutput.contains("Codex is thinking."))
+    }
+
+    @Test func terminalExitUpdatesViewStateAndStopsHandle() async throws {
+        let service = ControlledTaskPrepConversationService()
+        let launcher = RecordingTaskPrepTerminalSessionLauncher()
+        let controller = await MainActor.run {
+            TaskPrepController(service: service, terminalLauncher: launcher)
+        }
+
+        await MainActor.run {
+            controller.start(task: sampleTask(), in: sampleSession())
+        }
+
+        try await waitForPendingTurnCount(1, service: service)
+        service.completeNextTurn(with: [
+            .spawnAgentRequest(.init(reason: "ready")),
+            .completed
+        ])
+
+        _ = try await waitForPrepState(controller) { state in
+            state.turnState == .completed && state.pendingSpawnRequest != nil
+        }
+
+        await MainActor.run {
+            controller.approveSpawn()
+            launcher.emitExit(0)
+        }
+
+        let state = await MainActor.run { controller.viewState }
+        let handle = try #require(await MainActor.run(body: { launcher.handles.first }))
+        #expect(state.terminalStatus == .ended(0))
+        #expect(await MainActor.run(body: { handle.stopCallCount }) == 1)
     }
 
     @Test func sendUserMessageIsIgnoredWhileTurnIsStillStreaming() async throws {
@@ -508,6 +608,37 @@ struct TaskPrepControllerTests {
         let finalState = await MainActor.run { controller.viewState }
         #expect(finalState == TaskPrepViewState())
     }
+
+    @Test func resetStopsActiveTerminalSession() async throws {
+        let service = ControlledTaskPrepConversationService()
+        let launcher = RecordingTaskPrepTerminalSessionLauncher()
+        let controller = await MainActor.run {
+            TaskPrepController(service: service, terminalLauncher: launcher)
+        }
+
+        await MainActor.run {
+            controller.start(task: sampleTask(), in: sampleSession())
+        }
+
+        try await waitForPendingTurnCount(1, service: service)
+        service.completeNextTurn(with: [
+            .spawnAgentRequest(.init(reason: "ready")),
+            .completed
+        ])
+
+        _ = try await waitForPrepState(controller) { state in
+            state.turnState == .completed && state.pendingSpawnRequest != nil
+        }
+
+        await MainActor.run {
+            controller.approveSpawn()
+            controller.reset()
+        }
+
+        let handle = try #require(await MainActor.run(body: { launcher.handles.first }))
+        #expect(await MainActor.run(body: { handle.stopCallCount }) == 1)
+        #expect(await MainActor.run(body: { controller.viewState }) == TaskPrepViewState())
+    }
 }
 
 @MainActor
@@ -607,11 +738,55 @@ private struct SubmittedTranscript: Equatable, Sendable {
 }
 
 @MainActor
-private final class RecordingTaskPrepAgentHandoffLauncher: TaskPrepAgentHandoffLaunching {
+private final class RecordingTaskPrepTerminalSessionLauncher: TaskPrepTerminalSessionLaunching {
     private(set) var prompts: [String] = []
+    private(set) var handles: [RecordingTaskPrepTerminalSessionHandle] = []
+    private let error: (any Error)?
+    private var outputHandler: (@MainActor (String) -> Void)?
+    private var exitHandler: (@MainActor (Int32?) -> Void)?
 
-    func launch(prompt: String) throws {
+    init(error: (any Error)? = nil) {
+        self.error = error
+    }
+
+    func launch(
+        prompt: String,
+        onOutput: @escaping @MainActor (String) -> Void,
+        onExit: @escaping @MainActor (Int32?) -> Void
+    ) throws -> any TaskPrepTerminalSessionHandle {
         prompts.append(prompt)
+        outputHandler = onOutput
+        exitHandler = onExit
+
+        if let error {
+            throw error
+        }
+
+        let handle = RecordingTaskPrepTerminalSessionHandle()
+        handles.append(handle)
+        return handle
+    }
+
+    func emitOutput(_ output: String) {
+        outputHandler?(output)
+    }
+
+    func emitExit(_ exitCode: Int32?) {
+        exitHandler?(exitCode)
+    }
+}
+
+@MainActor
+private final class RecordingTaskPrepTerminalSessionHandle: TaskPrepTerminalSessionHandle {
+    private(set) var writtenInputs: [String] = []
+    private(set) var stopCallCount = 0
+
+    func write(_ input: String) {
+        writtenInputs.append(input)
+    }
+
+    func stop() {
+        stopCallCount += 1
     }
 }
 

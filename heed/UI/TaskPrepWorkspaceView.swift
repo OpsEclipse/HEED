@@ -10,7 +10,14 @@ struct TaskPrepWorkspaceView: View {
     var body: some View {
         GeometryReader { geometry in
             HStack(spacing: 0) {
-                TaskPrepChatView(controller: controller)
+                Group {
+                    if shouldShowTerminal(for: controller.viewState.terminalStatus) {
+                        TaskPrepTerminalView(controller: controller)
+                    } else {
+                        TaskPrepChatView(controller: controller)
+                            .accessibilityIdentifier("task-prep-chat")
+                    }
+                }
                     .frame(width: geometry.size.width * chatWidthFraction)
 
                 TaskPrepContextPanelView(
@@ -24,5 +31,14 @@ struct TaskPrepWorkspaceView: View {
         .background(HeedTheme.ColorToken.canvas)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("task-prep-workspace")
+    }
+
+    func shouldShowTerminal(for status: TaskPrepTerminalStatus) -> Bool {
+        switch status {
+        case .idle:
+            return false
+        case .launching, .running, .failed, .ended:
+            return true
+        }
     }
 }

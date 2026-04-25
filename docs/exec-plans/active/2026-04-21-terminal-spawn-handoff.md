@@ -1,5 +1,7 @@
 # Terminal Spawn Handoff
 
+Status: Superseded by `docs/exec-plans/active/2026-04-23-integrated-agent-terminal.md`. This plan records the earlier Terminal.app implementation path. Current product behavior should follow the integrated terminal plan instead.
+
 ## Goal
 
 Turn the existing spawn approval gate into a real end-to-end Codex handoff. When the prep workspace already has a spawn request and the user clicks `Approve spawn`, Heed should open Terminal and start `codex` with a rich task brief right away instead of only changing in-app state.
@@ -77,3 +79,4 @@ Turn the existing spawn approval gate into a real end-to-end Codex handoff. When
 - 2026-04-21: `xcodebuild test -only-testing:heedTests/TaskPrepControllerTests` passed.
 - 2026-04-21: `xcodebuild -project heed.xcodeproj -scheme heed -destination 'platform=macOS' build` passed.
 - 2026-04-21: `xcodebuild test -only-testing:heedUITests/heedUITests/testCompileTasksFlowAppearsInlineAfterRecordingStops` is still blocked by the known local macOS stale-process launch flake, so UI verification is only partially complete.
+- 2026-04-23: Superseded by the integrated terminal direction. The normal spawn path should no longer open Terminal.app.

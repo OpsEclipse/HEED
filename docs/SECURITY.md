@@ -61,18 +61,18 @@
 - Risk:
   An automated handoff could start follow-on work the user did not approve.
 - Current posture:
-  The task-prep prompt tells the model to use `spawn_agent` only after clear approval, and app code separately blocks the request until the user clicks `Approve spawn`. After approval, the app launches Terminal and starts `codex` with an in-memory brief built from the approved prep state, including the stable brief, prep chat, open questions, and full session transcript.
+  The task-prep prompt tells the model to use `spawn_agent` only after clear approval, and app code separately blocks the request until the user clicks `Approve spawn`. After approval, the app starts an integrated Codex terminal with an in-memory compressed brief built from the approved prep state. The full transcript is not pasted by default.
 - Guardrail:
   Keep both checks. Prompt rules alone are not a strong enough control.
 
-## Terminal Automation
+## Integrated Terminal
 
 - Risk:
-  Driving Terminal uses Apple Events [macOS app-to-app automation messages], which adds another permission surface and could expose prep context to another app.
+  Starting `codex` as a child process adds a local process boundary [the line where Heed starts and talks to another program]. The app target is not sandboxed in the current developer build so the child process can run local tools and access the checked-out repo.
 - Current posture:
-  Heed requests Terminal automation only after the user explicitly approves a spawn handoff. The app launches `codex` with a short Terminal command, then pastes the in-memory brief through `System Events` so it does not need a temp script file on disk.
+  Heed starts the integrated terminal only after the user explicitly approves a spawn handoff. The terminal prompt stays in memory, terminal output stays in memory, and the app does not write a temp script file to disk.
 - Guardrail:
-  Keep the automation prompt tied to the same explicit spawn approval, and do not switch to a disk-backed temp-file launch without a fresh privacy review.
+  Keep the launch tied to explicit spawn approval, do not auto-save terminal logs, and do not add full-transcript terminal access without a fresh privacy review.
 
 ## No Prep Persistence
 
@@ -105,24 +105,24 @@
 
 Real security-relevant facts from the project today:
 
-- App Sandbox is enabled.
+- App Sandbox is disabled in the current developer build because the integrated terminal must start `codex` and let it work inside the repo.
 - Hardened Runtime is enabled.
 - Generated Info.plist is enabled.
 - Privacy usage strings for microphone, screen capture, system audio, and Apple Events sending are present in build settings.
-- The checked-in entitlements file enables App Sandbox, Apple Events automation, microphone input, and outbound network access. Screen recording uses the macOS privacy prompt flow here, not a separate checked-in entitlement.
+- The checked-in entitlements file enables Apple Events automation, microphone input, and outbound network access. Screen recording uses the macOS privacy prompt flow here, not a separate checked-in entitlement.
 - The app has a network client for explicit OpenAI task-analysis and task-prep calls.
 - Transcript storage lives under Application Support.
-- Prep chat history and prep briefs are not written to Application Support.
-- The spawn handoff sends an in-memory brief to Terminal after approval instead of writing a temporary script file.
+- Prep chat history, prep briefs, and terminal output are not written to Application Support.
+- The spawn handoff sends an in-memory compressed brief to the integrated terminal after approval instead of writing a temporary script file.
 - The Whisper model download URL is `https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin`.
 - The current docs record the downloaded model checksum as `a03779c86df3323075f5e796cb2ce5029f00ec8869eee3fdfb897afe36c6d002`, but the build step does not enforce that checksum yet.
 
 ## Main Risks Right Now
 
 - Screen recording is still a broad permission and needs careful user explanation.
-- Export can move sensitive text outside the app sandbox.
+- Export can move sensitive text outside the app.
 - The OpenAI task path sends transcript text over the network, so the user-triggered boundary must stay clear.
-- Terminal automation adds a second explicit permission boundary, so the app should stay clear that it is about to start Codex in Terminal.
+- The integrated terminal starts a child `codex` process with local repo access, so the app should stay clear that it is starting local agent work.
 - The transcript tool must stay scoped to the selected session and must not expand into global transcript search without a fresh security review.
 - API key handling depends on Keychain staying the only secret store.
 - The build-time model download should still add explicit checksum verification in code, not docs alone.

@@ -80,6 +80,14 @@ enum TaskPrepSpawnStatus: Equatable, Sendable {
     case launchFailed(String)
 }
 
+enum TaskPrepTerminalStatus: Equatable, Sendable {
+    case idle
+    case launching
+    case running
+    case failed(String)
+    case ended(Int32?)
+}
+
 struct TaskPrepViewState: Equatable, Sendable {
     var messages: [TaskPrepMessage] = []
     var turnState: TaskPrepTurnState = .idle
@@ -87,4 +95,6 @@ struct TaskPrepViewState: Equatable, Sendable {
     var stableContextDraft: TaskPrepContextDraft?
     var spawnStatus: TaskPrepSpawnStatus = .idle
     var pendingSpawnRequest: TaskPrepSpawnRequest?
+    var terminalStatus: TaskPrepTerminalStatus = .idle
+    var terminalOutput: String = ""
 }
