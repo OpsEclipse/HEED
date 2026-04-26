@@ -17,7 +17,7 @@ Heed is now a real macOS SwiftUI app with a shipped local transcript path and a 
 - UI tests: [`../heedUITests/`](../heedUITests/)
 - Build settings: [`../heed.xcodeproj/project.pbxproj`](../heed.xcodeproj/project.pbxproj)
 
-The app now has a shared domain model, microphone capture, system-audio capture, file-backed source recording, post-stop batch transcription, a Whisper helper process, JSON session persistence, export helpers, an OpenAI-backed task-analysis pass, a GPT-5.4 task-prep workspace with streamed replies, Keychain-backed API-key storage, and demo-mode UI hooks for UI testing.
+The app now has a shared domain model, microphone capture, system-audio capture, file-backed source recording, post-stop batch transcription, a Whisper helper process, JSON session persistence, export helpers, an OpenAI-backed task-analysis pass, a GPT-5.4 task-prep workspace with streamed replies, optional Composio MCP tools [remote tool server access] for Gmail, Google Calendar, and Google Drive, Keychain-backed API-key storage, and demo-mode UI hooks for UI testing.
 
 ## Folder Ownership
 
@@ -60,7 +60,7 @@ The current product pipeline has two big paths.
 4. `SourceRecordingFileWriter`
    Writes each source into its own temporary local file during recording.
 5. `BatchSourceTranscriber`
-   Reads the saved source files after stop and turns them into source-specific transcript segments on a background actor [a Swift unit that protects data from race conditions].
+   Reads the saved source files after stop and turns them into source-specific transcript segments on a background actor [a Swift unit that protects data from race conditions]. If the normal speech gate misses quiet audio, it falls back to fixed-size chunks so Whisper still gets a chance to transcribe the saved audio.
 6. `SessionStore`
    Saves transcript sessions as local JSON and keeps crash loss small.
 7. `TaskAnalysisController`
@@ -68,9 +68,9 @@ The current product pipeline has two big paths.
 8. `TaskPrepController`
    Owns the second pass after the user clicks `Prepare context`. It tracks chat messages, streamed turn state, a pending brief, a stable brief, the spawn approval state for one selected task, and the integrated terminal state after approval.
 9. `OpenAITaskPrepConversationService`
-   Uses the Responses API with streaming [a reply that arrives in small pieces over one connection], reuses the previous response ID for follow-up turns, and exposes three tools: read-only `get_meeting_transcript`, `update_context_draft`, and guarded `spawn_agent`.
+   Uses the Responses API with streaming [a reply that arrives in small pieces over one connection], reuses the previous response ID for follow-up turns, and exposes three local function tools: read-only `get_meeting_transcript`, `update_context_draft`, and guarded `spawn_agent`. If a Composio API key is saved, it creates one Composio Tool Router session [a scoped tool access session] per prep conversation and appends an MCP tool for Gmail, Google Calendar, and Google Drive.
 10. `TaskPrepTerminalSessionLauncher`
-    Builds a compressed Codex prompt from the selected task, stable brief, open questions, transcript evidence, and prep chat, then starts `codex` inside a PTY-backed terminal session [a real terminal interface for a child process] in the prep workspace.
+    Builds a compressed Codex prompt from the selected task, stable brief, open questions, transcript evidence, and prep chat, then starts `codex --model gpt-5.2-codex --no-alt-screen` inside a PTY-backed terminal session [a real terminal interface for a child process] in the prep workspace. The compressed prompt is passed as the Codex prompt argument so the app does not need to paste text into the terminal after launch.
 11. `WorkspaceShell`
     Shows the transcript-first shell by default, then swaps the main canvas to a split prep workspace while task prep is active.
 12. Export layer
@@ -84,6 +84,7 @@ These boundaries matter for the shipped prep flow.
 - The right-side brief panel renders controller state. It does not build the draft itself.
 - The prep service may read transcript text only through `get_meeting_transcript`.
 - The transcript tool must stay scoped to the selected session. It must not browse all saved sessions.
+- The Composio MCP tool must stay scoped to the current Composio user ID and the enabled Gmail, Google Calendar, and Google Drive toolkits.
 - `update_context_draft` can update the pending brief during a turn, but the controller should pin that brief as stable only after the turn completes. When a stable brief already exists, the current panel keeps that stable brief visible and shows `Updating brief...` until the new turn finishes.
 - `spawn_agent` is advisory until the user approves it. After that click, the app builds a compressed Codex handoff locally and starts the integrated terminal.
 - Prep chat state is memory-only. It is not written into the saved transcript session format.
@@ -95,9 +96,11 @@ These broader boundaries should stay clear as the app grows.
 - UI should render state, not own audio capture.
 - Capture code should not know about export or session history.
 - Transcription should consume source-specific chunks, not reach into the UI.
+- A stopped recording should not be saved as completed when no transcript text was produced.
 - Persistence should own the saved session format.
 - Permission checks should live in one place so the app has one answer for “can we record?”
 - The OpenAI task layer should stay on-demand and must not upload transcript text unless the user clicked a task action.
+- The Composio task layer should stay on-demand and must not be enabled unless the user saves a Composio API key.
 - The task-prep workspace should remain clearly temporary until the team chooses a real saved format and migration [how old saved data becomes new saved data].
 
 ## Invariants

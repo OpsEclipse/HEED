@@ -165,15 +165,7 @@ struct WorkspaceShell: View {
     }
 
     var leadingUtilityActions: [UtilityRailView.Action] {
-        [
-            .init(
-                id: "fullscreen",
-                title: windowController.isFullScreen ? "Exit full screen" : "Full screen",
-                accessibilityIdentifier: "fullscreen-toggle"
-            ) {
-                windowController.toggleFullScreen()
-            }
-        ]
+        []
     }
 
     var trailingUtilityActions: [UtilityRailView.Action] {
@@ -212,6 +204,16 @@ struct WorkspaceShell: View {
                 accessibilityIdentifier: "copy-as-text"
             ) {
                 controller.copySelectedSession()
+            }
+        )
+
+        actions.append(
+            .init(
+                id: "fullscreen",
+                title: windowController.isFullScreen ? "Exit full screen" : "Full screen",
+                accessibilityIdentifier: "fullscreen-toggle"
+            ) {
+                windowController.toggleFullScreen()
             }
         )
 

@@ -380,7 +380,6 @@ struct TaskPrepControllerTests {
         }
 
         let state = await MainActor.run { controller.viewState }
-        #expect(state.terminalOutput.contains("Starting Codex..."))
         #expect(state.terminalOutput.contains("Codex is thinking."))
     }
 

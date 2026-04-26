@@ -42,7 +42,7 @@ struct WorkspaceShellTests {
     }
 
     @Test @MainActor
-    func utilityRailUsesFullscreenOnTheLeftAndPrimaryActionsOnTheRight() {
+    func utilityRailUsesFullscreenWithPrimaryActionsOnTheRight() {
         let recordingController = RecordingController(demoMode: true)
         let taskAnalysisController = TaskAnalysisController()
         let taskPrepController = TaskPrepController(service: WorkspaceShellTaskPrepServiceStub())
@@ -57,8 +57,8 @@ struct WorkspaceShellTests {
         #expect(shell.utilityPrimaryStatus == "Ready to record")
         #expect(shell.utilitySecondaryStatus == nil)
         #expect(shell.utilityDetails.isEmpty)
-        #expect(shell.leadingUtilityActions.map { $0.title } == ["Full screen"])
-        #expect(shell.trailingUtilityActions.map { $0.title } == ["Set API key", "Copy text"])
+        #expect(shell.leadingUtilityActions.isEmpty)
+        #expect(shell.trailingUtilityActions.map { $0.title } == ["Set API key", "Copy text", "Full screen"])
     }
 
     @Test @MainActor

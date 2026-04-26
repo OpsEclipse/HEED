@@ -213,7 +213,8 @@ struct OpenAIResponsesStreamTests {
                 model: "gpt-5.4",
                 apiKeyProvider: { "sk-test" },
                 transport: transport
-            )
+            ),
+            composioSessionProvider: DisabledComposioSessionProvider()
         )
 
         _ = try await collect(
@@ -241,11 +242,57 @@ struct OpenAIResponsesStreamTests {
         #expect(allText.contains(sampleTask().details))
         #expect(allText.contains(sampleTask().evidenceExcerpt))
         #expect(allText.contains("If you need missing information from the user, ask only the direct question in chat.") == true)
+        #expect(allText.contains("Use Composio tools for Gmail, Google Calendar, and Google Drive only when they are relevant to the current task.") == true)
         #expect(allText.contains("Do not narrate your process or mention internal tools.") == true)
         #expect(allText.contains("Stream short assistant updates as you think.") == false)
         #expect(allText.contains("Transcript summary:") == false)
         #expect(allText.contains("We should prepare a context packet.") == false)
         #expect(allText.contains("[MIC") == false)
+    }
+
+    @Test func taskPrepServiceAppendsComposioMCPToolWhenConfigured() async throws {
+        let transport = ScriptedStreamingTransport(
+            payloads: [
+                [
+                    "event: response.completed",
+                    #"data: {"response":{"id":"resp_initial"}}"#,
+                    ""
+                ].joined(separator: "\n")
+            ]
+        )
+        let service = OpenAITaskPrepConversationService(
+            client: OpenAIResponsesClient(
+                model: "gpt-5.4",
+                apiKeyProvider: { "sk-test" },
+                transport: transport
+            ),
+            composioSessionProvider: StaticComposioSessionProvider(
+                tool: ComposioMCPTool(
+                    serverURL: URL(string: "https://app.composio.dev/tool_router/v3/trs_test/mcp")!,
+                    headers: ["x-api-key": "composio-test"]
+                )
+            )
+        )
+
+        _ = try await collect(
+            from: service.beginTurn(input: TaskPrepTurnInput(task: sampleTask(), session: sampleSession()))
+        )
+
+        let request = try #require(transport.recordedJSONBodies().first)
+        let tools = try #require(request["tools"] as? [[String: Any]])
+        #expect(tools.count == 4)
+
+        let localToolNames = tools.compactMap { $0["name"] as? String }
+        #expect(localToolNames == ["get_meeting_transcript", "spawn_agent", "update_context_draft"])
+
+        let composioTool = try #require(tools.last)
+        #expect(composioTool["type"] as? String == "mcp")
+        #expect(composioTool["server_label"] as? String == "composio")
+        #expect(composioTool["server_url"] as? String == "https://app.composio.dev/tool_router/v3/trs_test/mcp")
+        #expect(composioTool["require_approval"] as? String == "never")
+
+        let headers = try #require(composioTool["headers"] as? [String: String])
+        #expect(headers["x-api-key"] == "composio-test")
     }
 
     @Test func taskPrepServiceContinuesTranscriptToolRoundTrip() async throws {
@@ -275,7 +322,8 @@ struct OpenAIResponsesStreamTests {
                 model: "gpt-5.4",
                 apiKeyProvider: { "sk-test" },
                 transport: transport
-            )
+            ),
+            composioSessionProvider: DisabledComposioSessionProvider()
         )
 
         let stream = service.beginTurn(input: TaskPrepTurnInput(task: sampleTask(), session: session))
@@ -344,7 +392,8 @@ struct OpenAIResponsesStreamTests {
                 model: "gpt-5.4",
                 apiKeyProvider: { "sk-test" },
                 transport: transport
-            )
+            ),
+            composioSessionProvider: DisabledComposioSessionProvider()
         )
 
         let stream = service.beginTurn(input: TaskPrepTurnInput(task: sampleTask(), session: session))
@@ -398,7 +447,8 @@ struct OpenAIResponsesStreamTests {
                 model: "gpt-5.4",
                 apiKeyProvider: { "sk-test" },
                 transport: transport
-            )
+            ),
+            composioSessionProvider: DisabledComposioSessionProvider()
         )
 
         _ = try await collect(
@@ -455,7 +505,8 @@ struct OpenAIResponsesStreamTests {
                 model: "gpt-5.4",
                 apiKeyProvider: { "sk-test" },
                 transport: transport
-            )
+            ),
+            composioSessionProvider: DisabledComposioSessionProvider()
         )
 
         let events = try await collect(
@@ -523,7 +574,8 @@ struct OpenAIResponsesStreamTests {
                 model: "gpt-5.4",
                 apiKeyProvider: { "sk-test" },
                 transport: transport
-            )
+            ),
+            composioSessionProvider: DisabledComposioSessionProvider()
         )
 
         let events = try await collect(
@@ -579,7 +631,8 @@ struct OpenAIResponsesStreamTests {
                 model: "gpt-5.4",
                 apiKeyProvider: { "sk-test" },
                 transport: transport
-            )
+            ),
+            composioSessionProvider: DisabledComposioSessionProvider()
         )
 
         do {
@@ -609,7 +662,8 @@ struct OpenAIResponsesStreamTests {
                 model: "gpt-5.4",
                 apiKeyProvider: { "sk-test" },
                 transport: transport
-            )
+            ),
+            composioSessionProvider: DisabledComposioSessionProvider()
         )
 
         do {
@@ -681,6 +735,14 @@ private final class ScriptedStreamingTransport: @unchecked Sendable, OpenAIRespo
 
             return object
         }
+    }
+}
+
+private struct StaticComposioSessionProvider: ComposioSessionProviding {
+    let tool: ComposioMCPTool?
+
+    func makeMCPTool() async throws -> ComposioMCPTool? {
+        tool
     }
 }
 

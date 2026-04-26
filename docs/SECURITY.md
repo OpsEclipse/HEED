@@ -41,11 +41,20 @@
 ## OpenAI Task Analysis And Prep
 
 - Risk:
-  Finished transcript text can leave the machine when the user runs AI task actions.
+  Finished transcript text can leave the machine when the user runs AI task actions. When Composio is enabled, the prep agent can also access connected Gmail, Google Calendar, and Google Drive data.
 - Current posture:
-  The app makes outbound OpenAI calls only after explicit user actions such as `Compile tasks`, `Prepare context`, or a follow-up message inside the prep chat. The prep workspace uses GPT-5.4 and streams replies [delivers the reply in small pieces over one network response].
+  The app makes outbound OpenAI calls only after explicit user actions such as `Compile tasks`, `Prepare context`, or a follow-up message inside the prep chat. The prep workspace uses GPT-5.4 and streams replies [delivers the reply in small pieces over one network response]. Composio tools are added only when a Composio API key is saved.
 - Guardrail:
-  Keep every transcript upload user-triggered, keep the network boundary obvious in the UI, and never send raw audio.
+  Keep every transcript upload user-triggered, keep the network boundary obvious in the UI, and never send raw audio. Keep Composio disabled when no Composio API key is saved.
+
+## Composio Tool Access
+
+- Risk:
+  Composio MCP [remote tool server access] can read or change data in connected apps.
+- Current posture:
+  The prep service creates one Composio Tool Router session per prep conversation when a Composio API key exists. That session is scoped to Gmail, Google Calendar, and Google Drive. The Composio API key is stored in Keychain and sent to Composio as the `x-api-key` header. The OpenAI MCP tool is configured with `require_approval` set to `never` because the app does not yet handle MCP approval response items.
+- Guardrail:
+  Keep the toolkit list narrow, keep the key in Keychain, and keep the prompt rule that asks the user for clear confirmation before sending email, creating or changing calendar events, or changing external app data. Add a real app-level approval flow before broadening toolkits or removing that prompt rule.
 
 ## Task-Prep Transcript Tool
 
@@ -70,9 +79,9 @@
 - Risk:
   Starting `codex` as a child process adds a local process boundary [the line where Heed starts and talks to another program]. The app target is not sandboxed in the current developer build so the child process can run local tools and access the checked-out repo.
 - Current posture:
-  Heed starts the integrated terminal only after the user explicitly approves a spawn handoff. The terminal prompt stays in memory, terminal output stays in memory, and the app does not write a temp script file to disk.
+  Heed starts the integrated terminal only after the user explicitly approves a spawn handoff. The compressed terminal prompt is passed directly to `codex` as a process argument [startup value given to a child program], terminal output stays in memory, and the app does not write a temp script file to disk.
 - Guardrail:
-  Keep the launch tied to explicit spawn approval, do not auto-save terminal logs, and do not add full-transcript terminal access without a fresh privacy review.
+  Keep the launch tied to explicit spawn approval, keep the handoff compressed because process arguments can be visible to local process-inspection tools, do not auto-save terminal logs, and do not add full-transcript terminal access without a fresh privacy review.
 
 ## No Prep Persistence
 
@@ -88,7 +97,7 @@
 - Risk:
   A leaked API key can expose billing and data access.
 - Current posture:
-  The app stores the OpenAI API key in Keychain and exposes a plain-text `Set API key` action in the utility rail that opens a dedicated settings sheet.
+  The app stores the OpenAI and Composio API keys in Keychain and exposes a plain-text `Set API key` action in the utility rail that opens a dedicated settings sheet.
 - Guardrail:
   Keep secrets out of source control, out of session files, and out of debug UI.
 
@@ -111,9 +120,10 @@ Real security-relevant facts from the project today:
 - Privacy usage strings for microphone, screen capture, system audio, and Apple Events sending are present in build settings.
 - The checked-in entitlements file enables Apple Events automation, microphone input, and outbound network access. Screen recording uses the macOS privacy prompt flow here, not a separate checked-in entitlement.
 - The app has a network client for explicit OpenAI task-analysis and task-prep calls.
+- The app has a Composio Tool Router client for optional Gmail, Google Calendar, and Google Drive tool sessions.
 - Transcript storage lives under Application Support.
 - Prep chat history, prep briefs, and terminal output are not written to Application Support.
-- The spawn handoff sends an in-memory compressed brief to the integrated terminal after approval instead of writing a temporary script file.
+- The spawn handoff sends an in-memory compressed brief to `codex` after approval instead of writing a temporary script file.
 - The Whisper model download URL is `https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin`.
 - The current docs record the downloaded model checksum as `a03779c86df3323075f5e796cb2ce5029f00ec8869eee3fdfb897afe36c6d002`, but the build step does not enforce that checksum yet.
 
@@ -125,6 +135,7 @@ Real security-relevant facts from the project today:
 - The integrated terminal starts a child `codex` process with local repo access, so the app should stay clear that it is starting local agent work.
 - The transcript tool must stay scoped to the selected session and must not expand into global transcript search without a fresh security review.
 - API key handling depends on Keychain staying the only secret store.
+- Composio MCP calls can read or change connected external app data, so the enabled toolkit list and confirmation prompt must stay narrow until a stronger approval UI exists.
 - The build-time model download should still add explicit checksum verification in code, not docs alone.
 
 ## Security Posture Summary
@@ -138,4 +149,5 @@ The repo now has the main product-specific controls in place for the shipped tas
 - Do not add silent background uploads of audio or transcript content.
 - Document every new permission, saved-data path, export path, and task-prep tool in this file.
 - Treat API keys as secrets and keep them in Keychain or an equally strong system store.
+- Do not expand Composio toolkits without updating this file and adding a product-visible approval story for write actions.
 - Keep the explicit approval gate in app code and not only in the model prompt before launching Terminal for Codex.

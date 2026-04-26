@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 import Testing
 @testable import heed
 
@@ -68,6 +69,20 @@ struct TaskPrepPresentationTests {
         #expect(workspace.shouldShowTerminal(for: .idle) == false)
         #expect(workspace.shouldShowTerminal(for: .running) == true)
         #expect(workspace.shouldShowTerminal(for: .failed("codex was not found.")) == true)
+    }
+
+    @Test func terminalKeyMapperSendsDirectTerminalControls() {
+        #expect(TerminalKeyMapper.input(characters: "\r", charactersIgnoringModifiers: "\r", keyCode: 36, modifierFlags: []) == "\r")
+        #expect(TerminalKeyMapper.input(characters: nil, charactersIgnoringModifiers: nil, keyCode: 123, modifierFlags: []) == "\u{1B}[D")
+        #expect(TerminalKeyMapper.input(characters: nil, charactersIgnoringModifiers: nil, keyCode: 124, modifierFlags: []) == "\u{1B}[C")
+        #expect(TerminalKeyMapper.input(characters: nil, charactersIgnoringModifiers: nil, keyCode: 125, modifierFlags: []) == "\u{1B}[B")
+        #expect(TerminalKeyMapper.input(characters: nil, charactersIgnoringModifiers: nil, keyCode: 126, modifierFlags: []) == "\u{1B}[A")
+        #expect(TerminalKeyMapper.input(characters: "c", charactersIgnoringModifiers: "c", keyCode: 8, modifierFlags: [.control]) == "\u{3}")
+    }
+
+    @Test func terminalCanvasKeepsReadableTextWidth() {
+        #expect(TerminalCanvasLayout.textContainerWidth(for: 0) == 288)
+        #expect(TerminalCanvasLayout.textContainerWidth(for: 640) == 608)
     }
 }
 

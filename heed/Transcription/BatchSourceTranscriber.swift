@@ -15,17 +15,20 @@ struct BatchSourceTranscriber<Worker: BatchSourceTranscribingWorker>: Sendable {
     private let source: AudioSource
     private let worker: Worker
     private let framesPerRead: Int
+    private let fallbackChunkFrames: Int
     private let responseTimeout: Duration
 
     init(
         source: AudioSource,
         worker: Worker,
         framesPerRead: Int = 4_096,
+        fallbackChunkFrames: Int = 15 * AudioChunker.sampleRate,
         responseTimeout: Duration = .seconds(20)
     ) {
         self.source = source
         self.worker = worker
         self.framesPerRead = max(2, framesPerRead - (framesPerRead % 2))
+        self.fallbackChunkFrames = max(AudioChunker.sampleRate, fallbackChunkFrames)
         self.responseTimeout = responseTimeout
     }
 
@@ -43,6 +46,8 @@ struct BatchSourceTranscriber<Worker: BatchSourceTranscribingWorker>: Sendable {
             didStart = true
 
             let handle = try FileHandle(forReadingFrom: fileURL)
+            var didReadFrames = false
+            var didEmitSpeechChunks = false
             defer {
                 handle.closeFile()
             }
@@ -57,17 +62,20 @@ struct BatchSourceTranscriber<Worker: BatchSourceTranscribingWorker>: Sendable {
                 guard !frames.isEmpty else {
                     continue
                 }
+                didReadFrames = true
 
-                try await process(
-                    chunker.append(frames),
-                    into: &output
-                )
+                let chunks = chunker.append(frames)
+                didEmitSpeechChunks = didEmitSpeechChunks || !chunks.isEmpty
+                try await process(chunks, into: &output)
             }
 
-            try await process(
-                chunker.flush(),
-                into: &output
-            )
+            let flushedChunks = chunker.flush()
+            didEmitSpeechChunks = didEmitSpeechChunks || !flushedChunks.isEmpty
+            try await process(flushedChunks, into: &output)
+
+            if source == .mic, output.isEmpty, didReadFrames, !didEmitSpeechChunks {
+                try await processFallbackChunks(from: fileURL, into: &output)
+            }
 
             await worker.stop()
             return output
@@ -76,6 +84,43 @@ struct BatchSourceTranscriber<Worker: BatchSourceTranscribingWorker>: Sendable {
                 await worker.stop()
             }
             throw error
+        }
+    }
+
+    private func processFallbackChunks(
+        from fileURL: URL,
+        into output: inout [TranscriptSegment]
+    ) async throws {
+        let handle = try FileHandle(forReadingFrom: fileURL)
+        defer {
+            handle.closeFile()
+        }
+
+        var startedFrame = 0
+
+        while true {
+            let data = handle.readData(ofLength: fallbackChunkFrames * MemoryLayout<Int16>.stride)
+            guard !data.isEmpty else {
+                break
+            }
+
+            let frames = decodePCM16Frames(from: data)
+            guard !frames.isEmpty else {
+                continue
+            }
+
+            try await process(
+                [
+                    AudioChunk(
+                        source: source,
+                        startedFrame: startedFrame,
+                        startedAt: TimeInterval(startedFrame) / TimeInterval(AudioChunker.sampleRate),
+                        frames: frames
+                    )
+                ],
+                into: &output
+            )
+            startedFrame += frames.count
         }
     }
 

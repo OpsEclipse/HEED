@@ -42,7 +42,7 @@
 - Main failure modes:
   File write errors, temp-file cleanup failures, missing source audio after stop, or long sessions that create large temp files.
 - Current confidence:
-  Medium. The app now writes mic and system audio to separate temp files during recording, then batch-transcribes both sources after stop and shows a processing state while that work runs.
+  Medium. The app now writes mic and system audio to separate temp files during recording, then batch-transcribes both sources after stop and shows a processing state while that work runs. If no speech chunks are emitted, it retries by sending fixed-size saved-audio chunks to the local transcriber. Empty recordings now surface an error instead of saving a completed session with no transcript.
 - Best next step:
   Add structured logs for stop-to-processing timing and validate long sessions for temp-file growth and cleanup.
 
@@ -95,11 +95,11 @@
 - Why it matters:
   This is the live handoff-prep surface after task compilation. It is where users decide whether the task has enough context to move forward.
 - Main failure modes:
-  A streamed turn ends before completion, the parser drops partial text, a stale turn lands on the wrong task, the transcript tool reads from the wrong session, the brief pins too early, the spawn approval state leaks across tasks, the integrated terminal fails to find or start `codex`, the terminal starts in the wrong repo, or users lose work because the prep workspace is intentionally not persisted.
+  A streamed turn ends before completion, the parser drops partial text, a stale turn lands on the wrong task, the transcript tool reads from the wrong session, Composio session creation fails, the remote tool list is unavailable, the brief pins too early, the spawn approval state leaks across tasks, the integrated terminal fails to find or start `codex`, the terminal starts in the wrong repo, or users lose work because the prep workspace is intentionally not persisted.
 - Current confidence:
-  Medium. `TaskPrepController` cancels stale turns, ignores late events from older turns, keeps interrupted partial text visible, promotes the brief only after a completed event, resets on session changes, blocks spawn until explicit approval, and now starts an integrated Codex terminal through a dedicated launcher. Tests cover streamed message assembly, transcript-tool submission, malformed streamed events, interrupted turns, stale-turn protection, the approval guard, terminal state, and the compressed handoff contents.
+  Medium. `TaskPrepController` cancels stale turns, ignores late events from older turns, keeps interrupted partial text visible, promotes the brief only after a completed event, resets on session changes, blocks spawn until explicit approval, and now starts an integrated Codex terminal through a dedicated launcher. The prep service can append Composio MCP tools when a Composio API key is saved. Tests cover streamed message assembly, transcript-tool submission, malformed streamed events, interrupted turns, stale-turn protection, Composio MCP request wiring, the approval guard, terminal state, and the compressed handoff contents.
 - Best next step:
-  Add more end-to-end checks against real network turns, then add manual smoke coverage for missing `codex`, repo access, and retry behavior.
+  Add more end-to-end checks against real network turns, including Composio account connection and failed remote tool calls, then add manual smoke coverage for missing `codex`, repo access, and retry behavior.
 
 ## Export
 

@@ -168,6 +168,8 @@ final class OpenAITaskPrepConversationService: TaskPrepConversationServicing {
     private struct ConversationContext {
         let input: TaskPrepTurnInput
         var lastResponseID: String?
+        var composioMCPTool: ComposioMCPTool?
+        var didResolveComposioMCPTool = false
     }
 
     private struct PendingTranscriptRequest {
@@ -198,11 +200,16 @@ final class OpenAITaskPrepConversationService: TaskPrepConversationServicing {
     }
 
     private let client: OpenAIResponsesClient
+    private let composioSessionProvider: any ComposioSessionProviding
     private var conversationContext: ConversationContext?
     private var activeStream: ActiveStream?
 
-    init(client: OpenAIResponsesClient = OpenAIResponsesClient(model: "gpt-5.4")) {
+    init(
+        client: OpenAIResponsesClient = OpenAIResponsesClient(model: "gpt-5.4"),
+        composioSessionProvider: any ComposioSessionProviding = ComposioToolRouterSessionProvider()
+    ) {
         self.client = client
+        self.composioSessionProvider = composioSessionProvider
     }
 
     func beginTurn(input: TaskPrepTurnInput) -> AsyncThrowingStream<TaskPrepConversationEvent, Error> {
@@ -288,38 +295,56 @@ final class OpenAITaskPrepConversationService: TaskPrepConversationServicing {
             return
         }
 
-        do {
-            let streamID = UUID()
-            let stream = try client.streamConversation(
-                input: inputItems,
-                tools: Self.tools,
-                previousResponseID: previousResponseID
-            )
+        let streamID = UUID()
+        streamState.isStreaming = true
+        streamState.currentStreamID = streamID
+        streamState.terminalEventReceived = false
+        streamState.streamTask = Task { [weak self] in
+            do {
+                guard let self else {
+                    return
+                }
 
-            streamState.isStreaming = true
-            streamState.currentStreamID = streamID
-            streamState.terminalEventReceived = false
-            streamState.streamTask = Task { [weak self] in
-                do {
-                    for try await event in stream {
-                        await MainActor.run {
-                            self?.handle(event, fromStreamID: streamID)
-                        }
-                    }
+                let responseTools = try await self.responseTools()
+                try Task.checkCancellation()
 
+                let stream = try self.client.streamConversation(
+                    input: inputItems,
+                    tools: responseTools,
+                    previousResponseID: previousResponseID
+                )
+
+                for try await event in stream {
                     await MainActor.run {
-                        self?.handleStreamFinished(streamID: streamID)
-                    }
-                } catch {
-                    await MainActor.run {
-                        self?.finishActiveStream(throwing: error)
+                        self.handle(event, fromStreamID: streamID)
                     }
                 }
+
+                await MainActor.run {
+                    self.handleStreamFinished(streamID: streamID)
+                }
+            } catch {
+                await MainActor.run {
+                    self?.finishActiveStream(throwing: error)
+                }
             }
-            activeStream = streamState
-        } catch {
-            finishActiveStream(throwing: error)
         }
+        activeStream = streamState
+    }
+
+    private func responseTools() async throws -> [[String: Any]] {
+        if conversationContext?.didResolveComposioMCPTool == false {
+            let tool = try await composioSessionProvider.makeMCPTool()
+            conversationContext?.composioMCPTool = tool
+            conversationContext?.didResolveComposioMCPTool = true
+        }
+
+        var tools = Self.tools
+        if let composioMCPTool = conversationContext?.composioMCPTool {
+            tools.append(composioMCPTool.responseToolPayload)
+        }
+
+        return tools
     }
 
     private func handle(_ event: OpenAIStreamEvent, fromStreamID streamID: UUID) {
@@ -579,6 +604,8 @@ final class OpenAITaskPrepConversationService: TaskPrepConversationServicing {
     private static let systemPrompt = """
     You help turn one meeting task into clear implementation context.
     Use the transcript tool when you need more meeting detail.
+    Use Composio tools for Gmail, Google Calendar, and Google Drive only when they are relevant to the current task.
+    Ask for clear user confirmation before sending email, creating or changing calendar events, or changing external app data.
     Use the context draft tool when you have a better structured draft to share.
     Use the spawn agent tool only when the user clearly approved it.
     If you need missing information from the user, ask only the direct question in chat.

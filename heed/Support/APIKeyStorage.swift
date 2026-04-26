@@ -28,8 +28,16 @@ final class InMemoryAPIKeyStore: APIKeyStoring {
 }
 
 final class KeychainAPIKeyStore: APIKeyStoring {
-    private let service = "sprsh.ca.heed.api-key"
-    private let account = "default"
+    static let openAIService = "sprsh.ca.heed.api-key"
+    static let composioService = "sprsh.ca.heed.composio-api-key"
+
+    private let service: String
+    private let account: String
+
+    init(service: String = KeychainAPIKeyStore.openAIService, account: String = "default") {
+        self.service = service
+        self.account = account
+    }
 
     func readAPIKey() throws -> String? {
         var query = baseQuery()

@@ -70,6 +70,10 @@ Replace the Terminal.app spawn handoff with an integrated terminal inside the ta
 - 2026-04-23: Changed prompt injection to bracketed paste so multiline compressed context is delivered as one pasted block instead of many submitted terminal lines.
 - 2026-04-24: Fixed the observed `env: codex: Operation not permitted` failure by removing App Sandbox from the developer app target and checked-in entitlements.
 - 2026-04-24: Verified `xcodebuild build` succeeds and `xcodebuild -showBuildSettings` reports `ENABLE_APP_SANDBOX = NO`.
+- 2026-04-25: Added terminal output filtering for ANSI/CSI control sequences [terminal commands for cursor movement, color, and modes], cursor-position responses, and disabled PTY echo for the child terminal.
+- 2026-04-25: Changed the integrated launcher to start `codex --model gpt-5.2-codex --no-alt-screen` with the compressed prompt as the prompt argument, avoiding a post-launch paste that could leave the pane stuck at `Starting Codex...` and avoiding unsupported newer model defaults from local Codex config.
+- 2026-04-25: Fixed the terminal canvas layout so the AppKit text view tracks the pane width instead of wrapping output at one character per line.
+- 2026-04-25: Set the PTY launch size to 120 columns by 40 rows so Codex formats output for a normal terminal width instead of a zero-width terminal.
 
 ## Surprises & Discoveries
 
@@ -79,13 +83,18 @@ Replace the Terminal.app spawn handoff with an integrated terminal inside the ta
 - 2026-04-23: A sandboxed app launches child processes inside the same sandbox. Real testing showed `/usr/bin/env codex` failed with `Operation not permitted`, so the developer build now disables App Sandbox for the integrated terminal path.
 - 2026-04-23: Sending a multiline prompt to an interactive terminal as raw text can submit partial lines. Bracketed paste is safer for the initial handoff.
 - 2026-04-23: The visible `^[[200~` prompt dump happened because `codex` never started. The PTY echoed the pasted prompt after `/usr/bin/env` failed.
+- 2026-04-25: Codex can emit control sequences before a full terminal renderer exists. The current app strips those sequences from visible text and answers cursor-position queries so the pane stays readable.
+- 2026-04-25: Even bracketed paste can be fragile in an embedded terminal because the app may write before the TUI is ready to accept input. Passing the prompt through the supported Codex prompt argument removes that timing race.
 
 ## Decision Log
 
 - 2026-04-23: Choose a real PTY-backed terminal over a fake terminal UI. Fake terminals look cheaper at first, but Codex and similar CLIs expect real terminal behavior.
 - 2026-04-23: Keep the right-side brief visible while the terminal runs. It acts like a compact mission card beside the live work area.
 - 2026-04-23: Do not paste the full transcript into Codex by default. Use compressed context first to avoid a context dump and reduce sensitive text exposure.
-- 2026-04-23: Keep the first terminal view simple. It renders PTY output as monospaced text and sends input through a command row. ANSI rendering [terminal color and cursor control handling] can be a follow-up.
+- 2026-04-25: The left pane should behave like a Conductor-style embedded terminal. It renders one terminal canvas and sends keyboard input directly to the PTY instead of showing a separate command row. ANSI rendering [terminal color and cursor control handling] can still be a follow-up.
+- 2026-04-25: Answer cursor-position requests from terminal TUIs with a simple cursor report so Codex does not time out waiting for `ESC [ 6 n` [a terminal command that asks where the cursor is].
+- 2026-04-25: Until the app has a full terminal emulator [software that fully interprets terminal drawing commands], sanitize control sequences from display text instead of showing raw codes such as `^[[200~` or `[?2004h`.
+- 2026-04-25: Use `--no-alt-screen` for the embedded Codex process so the simple text canvas can keep visible scrollback instead of trying to mirror an alternate terminal screen.
 
 ## Implementation Plan
 

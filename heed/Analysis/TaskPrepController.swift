@@ -270,6 +270,7 @@ final class TaskPrepController: ObservableObject {
             )
             viewState.spawnStatus = .launched
             viewState.terminalStatus = .running
+            viewState.terminalOutput = ""
             viewState.pendingSpawnRequest = nil
         } catch {
             let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription

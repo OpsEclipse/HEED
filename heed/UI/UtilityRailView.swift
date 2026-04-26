@@ -242,12 +242,10 @@ private enum UtilityRailPalette {
         primaryStatus: nil,
         secondaryStatus: nil,
         details: [],
-        leadingActions: [
-            .init(id: "fullscreen", title: "Full screen") {}
-        ],
         trailingActions: [
             .init(id: "set-api-key", title: "Set API key") {},
-            .init(id: "copy", title: "Copy text") {}
+            .init(id: "copy", title: "Copy text") {},
+            .init(id: "fullscreen", title: "Full screen") {}
         ]
     ) {
         FloatingTransportView(recordingState: .ready) { }
@@ -261,12 +259,10 @@ private enum UtilityRailPalette {
         primaryStatus: nil,
         secondaryStatus: nil,
         details: [],
-        leadingActions: [
-            .init(id: "fullscreen", title: "Exit full screen") {}
-        ],
         trailingActions: [
             .init(id: "set-api-key", title: "Set API key") {},
-            .init(id: "copy", title: "Copy text", isEnabled: false) {}
+            .init(id: "copy", title: "Copy text", isEnabled: false) {},
+            .init(id: "fullscreen", title: "Exit full screen") {}
         ]
     ) {
         FloatingTransportView(recordingState: .recording) { }

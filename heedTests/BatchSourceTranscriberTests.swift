@@ -60,6 +60,52 @@ struct BatchSourceTranscriberTests {
         #expect(segments[0].startedAt == 10)
         #expect(segments[0].endedAt == 11)
     }
+
+    @Test func batchSourceTranscriberFallsBackWhenSpeechGateEmitsNoChunks() async throws {
+        let fileURL = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString).appendingPathExtension("pcm")
+        let writer = SourceRecordingFileWriter(fileURL: fileURL)
+        let quietFrames = Array(repeating: Float(0.001), count: AudioChunker.sampleRate * 2)
+
+        try writer.write(frames: quietFrames)
+        try writer.finish()
+
+        let worker = BatchWorkerSpy(
+            responses: [
+                TranscriptSegment(source: .mic, startedAt: 0, endedAt: 1.5, text: "Quiet speech was still sent.")
+            ]
+        )
+        let transcriber = BatchSourceTranscriber(source: .mic, worker: worker, framesPerRead: 3_200)
+
+        let segments = try await transcriber.transcribe(from: fileURL)
+
+        #expect(await worker.startCount == 1)
+        #expect(await worker.transcribedChunkCount == 1)
+        #expect(await worker.stopCount == 1)
+        #expect(segments.map(\.text) == ["Quiet speech was still sent."])
+    }
+
+    @Test func batchSourceTranscriberDoesNotFallbackForQuietSystemAudio() async throws {
+        let fileURL = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString).appendingPathExtension("pcm")
+        let writer = SourceRecordingFileWriter(fileURL: fileURL)
+        let quietFrames = Array(repeating: Float(0.001), count: AudioChunker.sampleRate * 2)
+
+        try writer.write(frames: quietFrames)
+        try writer.finish()
+
+        let worker = BatchWorkerSpy(
+            responses: [
+                TranscriptSegment(source: .system, startedAt: 0, endedAt: 1.5, text: "you")
+            ]
+        )
+        let transcriber = BatchSourceTranscriber(source: .system, worker: worker, framesPerRead: 3_200)
+
+        let segments = try await transcriber.transcribe(from: fileURL)
+
+        #expect(await worker.startCount == 1)
+        #expect(await worker.transcribedChunkCount == 0)
+        #expect(await worker.stopCount == 1)
+        #expect(segments.isEmpty)
+    }
 }
 
 private func readPCM16Samples(from data: Data) -> [Int16] {

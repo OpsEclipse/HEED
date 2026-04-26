@@ -1,8 +1,9 @@
+import Darwin
 import Foundation
 
 final class SourceRecordingFileWriter {
     private let fileURL: URL
-    private var fileHandle: FileHandle?
+    private var fileDescriptor: Int32 = -1
     private var didClose = false
 
     init(fileURL: URL) {
@@ -24,7 +25,7 @@ final class SourceRecordingFileWriter {
             withUnsafeBytes(of: &sample) { data.append(contentsOf: $0) }
         }
 
-        try fileHandle?.write(contentsOf: data)
+        try POSIXFileDescriptorWriter.writeOrThrow(data, to: fileDescriptor)
     }
 
     func finish() throws {
@@ -37,8 +38,10 @@ final class SourceRecordingFileWriter {
         }
 
         didClose = true
-        fileHandle?.closeFile()
-        fileHandle = nil
+        if fileDescriptor >= 0 {
+            Darwin.close(fileDescriptor)
+            fileDescriptor = -1
+        }
     }
 
     private func ensureOpen() throws {
@@ -48,15 +51,15 @@ final class SourceRecordingFileWriter {
             ])
         }
 
-        if fileHandle != nil {
+        if fileDescriptor >= 0 {
             return
         }
 
-        if !FileManager.default.fileExists(atPath: fileURL.path) {
-            FileManager.default.createFile(atPath: fileURL.path, contents: nil)
+        let openedDescriptor = Darwin.open(fileURL.path, O_CREAT | O_WRONLY | O_APPEND, S_IRUSR | S_IWUSR)
+        guard openedDescriptor >= 0 else {
+            throw POSIXFileDescriptorWriterError.writeFailed(errno)
         }
 
-        fileHandle = try FileHandle(forWritingTo: fileURL)
-        fileHandle?.seekToEndOfFile()
+        fileDescriptor = openedDescriptor
     }
 }

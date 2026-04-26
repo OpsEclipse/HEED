@@ -47,6 +47,44 @@ struct RecordingControllerDiagnosticsTests {
         try await Task.sleep(for: .milliseconds(100))
         try? FileManager.default.removeItem(at: rootURL)
     }
+
+    @Test func stopWithoutCapturedAudioShowsErrorInsteadOfSavingEmptyCompletedSession() async throws {
+        let rootURL = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString, directoryHint: .isDirectory)
+        let store = SessionStore(baseDirectoryURL: rootURL)
+        let controller = RecordingController(
+            demoMode: false,
+            sessionStore: store,
+            dependencies: .init(
+                refreshPermissions: {
+                    PermissionSnapshot(microphone: .granted, screenCapture: .granted)
+                },
+                requestPermissionsIfNeeded: {
+                    PermissionSnapshot(microphone: .granted, screenCapture: .granted)
+                },
+                makeMicCaptureManager: {
+                    StubMicCaptureManager()
+                },
+                makeSystemAudioCaptureManager: {
+                    StubSystemAudioCaptureManager(startError: StubSystemAudioCaptureManager.TestError())
+                },
+                diagnosticSink: { _ in }
+            )
+        )
+
+        controller.handlePrimaryAction()
+        try await waitForRecordingState(.recording, controller: controller)
+
+        controller.handlePrimaryAction()
+        try await waitForRecordingState(
+            .error("Heed did not receive enough audio to transcribe. Check your microphone and system audio permissions, then try recording again."),
+            controller: controller
+        )
+
+        #expect(controller.sessions.isEmpty)
+        #expect(controller.selectedSession == nil)
+
+        try? FileManager.default.removeItem(at: rootURL)
+    }
 }
 
 @MainActor

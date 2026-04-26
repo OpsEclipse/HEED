@@ -2,105 +2,16 @@ import SwiftUI
 
 struct TaskPrepTerminalView: View {
     @ObservedObject var controller: TaskPrepController
-    @State private var draftInput = ""
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
-
-            Divider()
-                .overlay(HeedTheme.ColorToken.borderSubtle)
-
-            ScrollViewReader { proxy in
-                ScrollView {
-                    Text(terminalText)
-                        .font(.system(size: 13, design: .monospaced))
-                        .foregroundStyle(HeedTheme.ColorToken.textPrimary)
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .topLeading)
-                        .padding(.horizontal, 18)
-                        .padding(.vertical, 16)
-                        .id("terminal-output")
-                }
-                .heedHiddenScrollBars()
-                .scrollIndicators(.hidden)
-                .background(Color.black.opacity(0.24))
-                .onChange(of: controller.viewState.terminalOutput) {
-                    withAnimation(.easeOut(duration: 0.16)) {
-                        proxy.scrollTo("terminal-output", anchor: .bottom)
-                    }
-                }
-            }
-
-            Divider()
-                .overlay(HeedTheme.ColorToken.borderSubtle)
-
-            inputRow
-        }
+        TerminalCanvasView(
+            text: terminalText,
+            isRunning: canSendInput,
+            onInput: controller.sendTerminalInput
+        )
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(HeedTheme.ColorToken.canvas)
+        .background(Color.black)
         .accessibilityIdentifier("task-prep-terminal")
-    }
-
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Agent terminal")
-                .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                .foregroundStyle(HeedTheme.ColorToken.textSecondary)
-
-            if let taskTitle = controller.activeTaskTitle {
-                Text(taskTitle)
-                    .font(.system(size: 22, weight: .semibold))
-                    .foregroundStyle(HeedTheme.ColorToken.textPrimary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            Text(statusText)
-                .font(.system(size: 12, weight: .medium, design: .monospaced))
-                .foregroundStyle(statusColor)
-                .fixedSize(horizontal: false, vertical: true)
-                .accessibilityIdentifier("task-prep-terminal-status")
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 24)
-        .padding(.top, 28)
-        .padding(.bottom, 18)
-    }
-
-    private var inputRow: some View {
-        HStack(alignment: .bottom, spacing: 12) {
-            TextField("Type into Codex", text: $draftInput, axis: .vertical)
-                .textFieldStyle(.plain)
-                .font(.system(size: 14, design: .monospaced))
-                .foregroundStyle(HeedTheme.ColorToken.textPrimary)
-                .lineLimit(1 ... 4)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 11)
-                .background(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(HeedTheme.ColorToken.panel)
-                )
-                .overlay {
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .stroke(HeedTheme.ColorToken.borderSubtle, lineWidth: 1)
-                }
-                .disabled(!canSendInput)
-                .accessibilityIdentifier("task-prep-terminal-input")
-                .onSubmit(sendInput)
-
-            Button("Send", action: sendInput)
-                .buttonStyle(
-                    HeedTransportButtonStyle(
-                        fillColor: HeedTheme.ColorToken.actionYellow,
-                        textColor: Color.black.opacity(0.82),
-                        size: .compact
-                    )
-                )
-                .disabled(!canSendInput || draftInput.isEmpty)
-                .accessibilityIdentifier("task-prep-terminal-send")
-        }
-        .padding(.horizontal, 24)
-        .padding(.vertical, 18)
     }
 
     private var terminalText: String {
@@ -134,25 +45,190 @@ struct TaskPrepTerminalView: View {
             return "Codex exited."
         }
     }
+}
 
-    private var statusColor: Color {
-        switch controller.viewState.terminalStatus {
-        case .failed:
-            return HeedTheme.ColorToken.warning
-        case .launching, .running:
-            return HeedTheme.ColorToken.actionYellow
-        case .idle, .ended:
-            return HeedTheme.ColorToken.textSecondary
+struct TerminalCanvasView: NSViewRepresentable {
+    let text: String
+    let isRunning: Bool
+    let onInput: (String) -> Void
+
+    func makeNSView(context: Context) -> NSScrollView {
+        let scrollView = TerminalScrollView()
+        scrollView.drawsBackground = true
+        scrollView.backgroundColor = .black
+        scrollView.hasVerticalScroller = true
+        scrollView.hasHorizontalScroller = false
+        scrollView.autohidesScrollers = true
+        scrollView.borderType = .noBorder
+
+        let textView = TerminalTextView()
+        textView.onInput = onInput
+        textView.isRunning = isRunning
+        textView.isEditable = false
+        textView.isSelectable = true
+        textView.drawsBackground = true
+        textView.backgroundColor = .black
+        textView.textColor = .white
+        textView.insertionPointColor = .white
+        textView.font = .monospacedSystemFont(ofSize: 13, weight: .regular)
+        TerminalCanvasLayout.configure(textView, in: scrollView)
+        textView.isVerticallyResizable = true
+        textView.isHorizontallyResizable = false
+        textView.string = text
+
+        scrollView.documentView = textView
+        TerminalCanvasLayout.resize(textView, in: scrollView)
+        context.coordinator.textView = textView
+        DispatchQueue.main.async {
+            scrollView.window?.makeFirstResponder(textView)
         }
+
+        return scrollView
     }
 
-    private func sendInput() {
-        guard canSendInput else {
+    func updateNSView(_ scrollView: NSScrollView, context: Context) {
+        guard let textView = context.coordinator.textView else {
             return
         }
 
-        let input = draftInput
-        draftInput = ""
-        controller.sendTerminalInput(input + "\n")
+        textView.onInput = onInput
+        textView.isRunning = isRunning
+        TerminalCanvasLayout.resize(textView, in: scrollView)
+
+        if textView.string != text {
+            textView.string = text
+            TerminalCanvasLayout.resize(textView, in: scrollView)
+            textView.scrollToEndOfDocument(nil)
+        }
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    final class Coordinator {
+        weak var textView: TerminalTextView?
+    }
+}
+
+final class TerminalScrollView: NSScrollView {
+    override func layout() {
+        super.layout()
+
+        guard let textView = documentView as? TerminalTextView else {
+            return
+        }
+
+        TerminalCanvasLayout.resize(textView, in: self)
+    }
+}
+
+enum TerminalCanvasLayout {
+    nonisolated static let minimumContentWidth: CGFloat = 320
+    nonisolated static let textContainerInset = NSSize(width: 16, height: 14)
+
+    @MainActor
+    static func configure(_ textView: NSTextView, in scrollView: NSScrollView) {
+        textView.textContainerInset = textContainerInset
+        textView.textContainer?.lineFragmentPadding = 0
+        textView.textContainer?.widthTracksTextView = true
+        textView.textContainer?.heightTracksTextView = false
+        textView.autoresizingMask = [.width]
+        textView.minSize = NSSize(width: 0, height: scrollView.contentSize.height)
+        textView.maxSize = NSSize(
+            width: CGFloat.greatestFiniteMagnitude,
+            height: CGFloat.greatestFiniteMagnitude
+        )
+    }
+
+    @MainActor
+    static func resize(_ textView: NSTextView, in scrollView: NSScrollView) {
+        let contentSize = scrollView.contentSize
+        let contentWidth = max(contentSize.width, minimumContentWidth)
+        let contentHeight = max(contentSize.height, textView.frame.height)
+        textView.frame = NSRect(
+            origin: .zero,
+            size: NSSize(width: contentWidth, height: contentHeight)
+        )
+        textView.textContainer?.containerSize = NSSize(
+            width: textContainerWidth(for: contentWidth),
+            height: CGFloat.greatestFiniteMagnitude
+        )
+    }
+
+    nonisolated static func textContainerWidth(for contentWidth: CGFloat) -> CGFloat {
+        max(1, max(contentWidth, minimumContentWidth) - (textContainerInset.width * 2))
+    }
+}
+
+final class TerminalTextView: NSTextView {
+    var onInput: (String) -> Void = { _ in }
+    var isRunning = false
+
+    override var acceptsFirstResponder: Bool {
+        true
+    }
+
+    override func keyDown(with event: NSEvent) {
+        guard isRunning else {
+            return
+        }
+
+        guard let input = TerminalKeyMapper.input(for: event) else {
+            super.keyDown(with: event)
+            return
+        }
+
+        onInput(input)
+    }
+}
+
+enum TerminalKeyMapper {
+    nonisolated static func input(
+        characters: String?,
+        charactersIgnoringModifiers: String?,
+        keyCode: UInt16,
+        modifierFlags: NSEvent.ModifierFlags
+    ) -> String? {
+        switch keyCode {
+        case 36, 76:
+            return "\r"
+        case 51:
+            return "\u{7F}"
+        case 53:
+            return "\u{1B}"
+        case 123:
+            return "\u{1B}[D"
+        case 124:
+            return "\u{1B}[C"
+        case 125:
+            return "\u{1B}[B"
+        case 126:
+            return "\u{1B}[A"
+        default:
+            break
+        }
+
+        if modifierFlags.contains(.control),
+           let character = charactersIgnoringModifiers?.unicodeScalars.first {
+            let value = character.value
+            if value >= 64, value <= 95 {
+                return String(UnicodeScalar(value - 64)!)
+            }
+            if value >= 97, value <= 122 {
+                return String(UnicodeScalar(value - 96)!)
+            }
+        }
+
+        return characters
+    }
+
+    nonisolated static func input(for event: NSEvent) -> String? {
+        input(
+            characters: event.characters,
+            charactersIgnoringModifiers: event.charactersIgnoringModifiers,
+            keyCode: event.keyCode,
+            modifierFlags: event.modifierFlags
+        )
     }
 }

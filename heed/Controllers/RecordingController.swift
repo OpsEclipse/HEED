@@ -530,6 +530,12 @@ final class RecordingController: ObservableObject {
 
         sourceProcessingStates = Dictionary(uniqueKeysWithValues: availableSources.map { ($0, .queued) })
 
+        guard !availableSources.isEmpty else {
+            throw NSError(domain: "Heed.RecordingController", code: 5, userInfo: [
+                NSLocalizedDescriptionKey: "Heed did not receive enough audio to transcribe. Check your microphone and system audio permissions, then try recording again."
+            ])
+        }
+
         var failureMessages: [String] = []
 
         for source in availableSources {
@@ -548,6 +554,12 @@ final class RecordingController: ObservableObject {
         if completedSession.segments.isEmpty, !failureMessages.isEmpty {
             throw NSError(domain: "Heed.RecordingController", code: 2, userInfo: [
                 NSLocalizedDescriptionKey: failureMessages.joined(separator: " ")
+            ])
+        }
+
+        if completedSession.segments.isEmpty {
+            throw NSError(domain: "Heed.RecordingController", code: 6, userInfo: [
+                NSLocalizedDescriptionKey: "Heed recorded audio, but the local transcriber did not find any speech. Try speaking closer to the microphone or recording a little longer."
             ])
         }
 

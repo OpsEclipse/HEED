@@ -14,7 +14,8 @@ It sends:
 
 - one system prompt
 - one user prompt built from the selected task
-- three tools
+- three local function tools
+- an optional Composio MCP tool [remote tool server access] for Gmail, Google Calendar, and Google Drive when a Composio API key is saved
 - a streamed [text arrives in small pieces over one open network response] request to OpenAI
 
 The model gets more transcript detail only if it calls the `get_meeting_transcript` tool [a named function the model can ask the app to run].
@@ -22,6 +23,8 @@ The model gets more transcript detail only if it calls the `get_meeting_transcri
 The model updates the right-side context brief by calling the `update_context_draft` tool [a named function the model can ask the app to run].
 
 The app stores that draft in controller state. It does not save it to disk.
+
+When Composio is enabled, the model can use Gmail, Google Calendar, and Google Drive tools through Composio. The app creates one Composio Tool Router session [a scoped tool access session] per prep conversation.
 
 Follow-up messages do not rebuild the whole prompt from scratch. They send the new user message plus `previous_response_id` [the ID of the last OpenAI response, used to continue the same conversation]. That means the app is relying on the Responses API conversation chain [OpenAI keeps later turns linked to earlier turns] to carry prior context forward.
 
@@ -60,6 +63,7 @@ flowchart TD
 | `TaskAnalysisSectionView` | Starts prep when the user clicks `Prepare context`. |
 | `TaskPrepController` | Owns visible prep state in SwiftUI. That includes chat messages, pending draft, stable draft, and spawn approval state. |
 | `OpenAITaskPrepConversationService` | Turns app actions into OpenAI streaming requests and turns streamed OpenAI events into app events. |
+| `ComposioToolRouterSessionProvider` | Creates the optional Composio MCP tool for Gmail, Google Calendar, and Google Drive. |
 | `OpenAIResponsesClient` | Builds the HTTP request to `/v1/responses`. |
 | `OpenAIResponsesStreamParser` | Parses SSE [server-sent events: named text events sent over one HTTP response] lines into typed events. |
 | `TaskPrepContextPanelView` | Renders the brief from controller state. |
@@ -99,7 +103,8 @@ Think of this like opening a blank note card before the researcher starts speaki
 
 1. Cancels any older prep stream.
 2. Stores `conversationContext` with the selected task and session.
-3. Calls `makeStreamedTurn(...)` with:
+3. Resolves the optional Composio MCP tool if a Composio API key is saved.
+4. Calls `makeStreamedTurn(...)` with:
    - the initial input items
    - no `previous_response_id`
 
@@ -159,7 +164,8 @@ This is the real shape the app builds:
   "tools": [
     { "name": "get_meeting_transcript", "type": "function", "strict": true, "parameters": { "...": "..." } },
     { "name": "spawn_agent", "type": "function", "strict": true, "parameters": { "...": "..." } },
-    { "name": "update_context_draft", "type": "function", "strict": true, "parameters": { "...": "..." } }
+    { "name": "update_context_draft", "type": "function", "strict": true, "parameters": { "...": "..." } },
+    { "type": "mcp", "server_label": "composio", "server_url": "<Composio MCP URL>", "headers": { "x-api-key": "<Composio API key>" }, "require_approval": "never" }
   ],
   "max_output_tokens": 3200,
   "stream": true
@@ -173,6 +179,8 @@ This is the actual system prompt in the code today:
 ```text
 You help turn one meeting task into clear implementation context.
 Use the transcript tool when you need more meeting detail.
+Use Composio tools for Gmail, Google Calendar, and Google Drive only when they are relevant to the current task.
+Ask for clear user confirmation before sending email, creating or changing calendar events, or changing external app data.
 Use the context draft tool when you have a better structured draft to share.
 Use the spawn agent tool only when the user clearly approved it.
 If you need missing information from the user, ask only the direct question in chat.

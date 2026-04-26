@@ -10,7 +10,8 @@ The app still has one main macOS window today.
 - The sessions list is in a hidden-by-default left sidebar column with a compact tree-style treatment.
 - The main record or stop action lives in one floating yellow button.
 - The window opens at a fixed default size and hides the normal macOS title bar controls.
-- The bottom utility rail keeps the center transport clear, puts `Full screen` on the left, and keeps `Compile tasks`, `Set API key`, and `Copy text` on the right when the selected session is eligible for task review.
+- The bottom utility rail keeps the center transport clear and keeps `Compile tasks`, `Set API key`, `Copy text`, and `Full screen` on the right when the selected session is eligible for task review.
+- `Set API key` opens one sheet for both OpenAI and Composio API keys.
 - The controller still has `.txt` and `.md` file export code, but those file export actions are not surfaced in the current shell.
 - While recording, the canvas shows capture state only. It does not stream transcript text live.
 - After stop, the shell switches into a processing state while both sources are transcribed.
@@ -87,8 +88,7 @@ The bottom rail stays visually quiet.
 
 - It sits flush with the bottom edge of the window.
 - It keeps the record button centered without extra status copy around it.
-- It puts the fullscreen toggle on the left side.
-- It keeps text-only actions on the right side.
+- It keeps text-only actions, including the fullscreen toggle, on the right side.
 - It exposes `Compile tasks` only for completed sessions with transcript text.
 - It exposes `Set API key` as a plain-text action.
 - It keeps `Copy text` visible beside that action.
@@ -121,12 +121,14 @@ The transcript review flow stays in the same reading surface.
 
 The left pane is the live conversation surface before spawn approval. After approval, it becomes the integrated Codex terminal.
 
-- It shows the selected task title at the top.
+- Before spawn approval, it shows the selected task title at the top.
 - It shows streamed GPT-5.4 replies as text deltas [small text pieces that arrive one after another].
 - It shows user follow-up messages between assistant turns.
 - The input row stays disabled while a turn is streaming.
 - Interrupted turns keep their partial text and mark the assistant bubble as interrupted.
-- After a successful spawn approval, it shows terminal output and a terminal input row.
+- After a successful spawn approval, the left pane becomes a plain embedded terminal canvas [the visible area where terminal text appears and keyboard input is sent].
+- The terminal canvas takes direct keyboard input. It does not show a separate `Type into Codex` field or Send button.
+- The terminal canvas sizes its text view to the visible pane width so Codex output wraps like normal terminal text instead of one character per line.
 
 ### Right Context Brief Panel
 
@@ -162,10 +164,11 @@ The right pane is the stable handoff draft.
 16. The app swaps the main canvas into the split prep workspace.
 17. The first assistant turn streams into the left chat pane.
 18. If the model asks for more evidence, the service uses a read-only transcript tool for the selected session only.
-19. The right panel pins a stable brief after the turn completes.
-20. If the model asks to spawn, the right panel shows the approval request and the user can click `Approve spawn`.
-21. A successful approval turns the left pane into an integrated terminal and starts `codex` with a compressed handoff.
-22. Closing the workspace, switching sessions, or starting prep for another task clears the prep chat, brief, and terminal output because they are intentionally temporary.
+19. If a Composio API key is saved, the service also gives the prep agent Gmail, Google Calendar, and Google Drive tools through Composio MCP [a remote tool server protocol].
+20. The right panel pins a stable brief after the turn completes.
+21. If the model asks to spawn, the right panel shows the approval request and the user can click `Approve spawn`.
+22. A successful approval turns the left pane into an integrated terminal and starts `codex --model gpt-5.2-codex --no-alt-screen` with a compressed handoff.
+23. Closing the workspace, switching sessions, or starting prep for another task clears the prep chat, brief, and terminal output because they are intentionally temporary.
 
 ## Current UI Behavior
 
@@ -236,6 +239,8 @@ These modules are now in code.
   Renders the split prep layout.
 - `TaskPrepChatView`
   Renders the streamed chat thread and follow-up input row.
+- `TaskPrepTerminalView`
+  Renders the direct embedded terminal canvas after spawn approval.
 - `TaskPrepContextPanelView`
   Renders the right-side stable brief and spawn approval state.
 - `SessionSidebarView`
