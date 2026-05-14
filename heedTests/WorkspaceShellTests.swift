@@ -3,6 +3,38 @@ import Testing
 @testable import heed
 
 struct WorkspaceShellTests {
+    @Test func terminalShellFixtureDefaultsToSelectedBranchAndTerminal() {
+        let state = TerminalShellWorkspace.preview
+
+        #expect(state.selectedProject?.name == "heed")
+        #expect(state.selectedBranch?.name == "ui-revamp")
+        #expect(state.selectedBranchTab?.kind == .terminal)
+        #expect(state.selectedTerminal?.title == "terminal 1")
+    }
+
+    @Test func terminalShellFixtureExposesBranchScopedTabs() {
+        let state = TerminalShellWorkspace.preview
+
+        #expect(state.selectedBranch?.tabs.map(\.title) == [
+            "terminal 1",
+            "terminal 2",
+            "unstaged changes",
+            "task prep",
+            "tasks"
+        ])
+    }
+
+    @Test func terminalShellFixtureExposesChangedFileSummaries() {
+        let state = TerminalShellWorkspace.preview
+
+        #expect(state.changedFiles.map(\.path) == [
+            "heed/UI/WorkspaceShell.swift",
+            "heed/UI/ProjectBranchSidebarView.swift",
+            "heed/UI/TerminalWorkspaceView.swift"
+        ])
+        #expect(state.selectedChangedFile?.summaryLines.contains("+ terminal tab strip") == true)
+    }
+
     @Test @MainActor
     func prepWorkspaceVisibilityTracksActivePrepTask() {
         let recordingController = RecordingController(demoMode: true)
