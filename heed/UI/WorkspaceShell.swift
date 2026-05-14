@@ -279,18 +279,31 @@ struct WorkspaceShell: View {
     }
 
     private func showNewSessionForActiveTaskPrep() {
-        if taskPrepController.activeTaskID != nil {
+        if shouldLockNewSessionMode {
             selectedShellMode = .newSession
         }
     }
 
     private func showTerminalModeWhenTaskPrepInactive() {
-        guard taskPrepController.activeTaskID == nil else {
+        guard !shouldLockNewSessionMode else {
             selectedShellMode = .newSession
             return
         }
 
         selectedShellMode = .terminal
+    }
+
+    private var shouldLockNewSessionMode: Bool {
+        if taskPrepController.activeTaskID != nil {
+            return true
+        }
+
+        switch controller.state {
+        case .recording, .stopping, .processing, .requestingPermissions:
+            return true
+        case .idle, .ready, .error:
+            return false
+        }
     }
 
     private func selectDefaultTab(in branch: TerminalShellBranch) {
