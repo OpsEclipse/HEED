@@ -19,14 +19,15 @@ final class heedUITests: XCTestCase {
         let app = launchAppInUITestMode()
         defer { forceQuitHeed() }
 
-        XCTAssertTrue(app.buttons["record-button"].waitForExistence(timeout: uiTimeout))
-        XCTAssertTrue(app.staticTexts["Press record to begin the full transcript"].waitForExistence(timeout: uiTimeout))
+        XCTAssertTrue(app.otherElements["top-nav"].waitForExistence(timeout: uiTimeout))
         XCTAssertTrue(app.buttons["sidebar-toggle"].exists)
-        XCTAssertTrue(app.buttons["copy-as-text"].exists)
+        XCTAssertTrue(app.textFields["shell-search"].exists)
+        XCTAssertTrue(app.buttons["open-ide-menu"].exists)
+        XCTAssertTrue(app.buttons["settings-button"].exists)
 
         let sidebarToggle = app.buttons["sidebar-toggle"]
         sidebarToggle.click()
-        XCTAssertTrue(waitForButtonLabel("sidebar-toggle", label: "Close", in: app))
+        XCTAssertTrue(app.otherElements["session-sidebar"].waitForExistence(timeout: uiTimeout))
 
         app.buttons["record-button"].click()
 

@@ -9,6 +9,7 @@ struct WorkspaceShell: View {
     @ObservedObject var apiKeySettingsViewModel: APIKeySettingsViewModel
     @State private var isSidebarVisible = false
     @State private var isAPIKeySettingsPresented = false
+    @State private var searchText = ""
     @StateObject private var windowController = WorkspaceWindowController()
 
     private var displayedSession: TranscriptSession? {
@@ -30,6 +31,13 @@ struct WorkspaceShell: View {
     var body: some View {
         GeometryReader { _ in
             VStack(spacing: 0) {
+                TopNavView(
+                    isSidebarVisible: $isSidebarVisible,
+                    searchText: $searchText
+                ) {
+                    isAPIKeySettingsPresented = true
+                }
+
                 HStack(spacing: 0) {
                     if isSidebarVisible {
                         SessionSidebarView(
@@ -129,10 +137,6 @@ struct WorkspaceShell: View {
                     .transition(.opacity)
                 }
             }
-
-            SidebarToggleButton(isSidebarVisible: $isSidebarVisible)
-                .padding(.top, 20)
-                .padding(.leading, 20)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -297,23 +301,5 @@ private final class WorkspaceWindowController: ObservableObject {
                 self?.updateFullScreenState(false)
             }
         }
-    }
-}
-
-private struct SidebarToggleButton: View {
-    @Binding var isSidebarVisible: Bool
-
-    var body: some View {
-        Button(isSidebarVisible ? "Close" : "Sessions") {
-            withAnimation(.easeOut(duration: 0.22)) {
-                isSidebarVisible.toggle()
-            }
-        }
-        .buttonStyle(.plain)
-        .font(.system(size: 11, weight: .medium, design: .monospaced))
-        .foregroundStyle(HeedTheme.ColorToken.textSecondary)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .accessibilityIdentifier("sidebar-toggle")
     }
 }
