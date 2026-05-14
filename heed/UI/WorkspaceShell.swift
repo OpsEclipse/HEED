@@ -50,7 +50,7 @@ struct WorkspaceShell: View {
                         ProjectBranchSidebarView(
                             workspace: terminalWorkspace,
                             onTasks: {
-                                selectedShellMode = .newSession
+                                selectTasksTab()
                             },
                             onNewSession: {
                                 selectedShellMode = .newSession
@@ -121,13 +121,66 @@ struct WorkspaceShell: View {
             Group {
                 switch selectedShellMode {
                 case .terminal:
-                    transcriptWorkspace
+                    temporaryTerminalWorkspace
                 case .newSession:
                     transcriptWorkspace
                 }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var temporaryTerminalWorkspace: some View {
+        let project = terminalWorkspace.selectedProject
+        let branch = terminalWorkspace.selectedBranch
+        let tab = terminalWorkspace.selectedBranchTab
+        let terminal = terminalWorkspace.selectedTerminal
+
+        return VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 10) {
+                Text(project?.name ?? "no project")
+                Text("/")
+                    .foregroundStyle(HeedTheme.ColorToken.textSecondary)
+                Text(branch?.name ?? "no branch")
+                Text("/")
+                    .foregroundStyle(HeedTheme.ColorToken.textSecondary)
+                Text(tab?.title ?? "no tab")
+            }
+            .font(.system(size: 12, weight: .semibold, design: .monospaced))
+            .foregroundStyle(HeedTheme.ColorToken.textPrimary)
+            .padding(.horizontal, 18)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(height: 42)
+            .overlay(alignment: .bottom) {
+                Rectangle()
+                    .fill(HeedTheme.ColorToken.borderStrong)
+                    .frame(height: HeedTheme.Stroke.brutalist)
+            }
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(Array((terminal?.promptLines ?? []).enumerated()), id: \.offset) { _, line in
+                        Text(line)
+                            .font(.system(size: 12, weight: .medium, design: .monospaced))
+                            .foregroundStyle(line.hasPrefix("$") ? HeedTheme.ColorToken.textSecondary : HeedTheme.ColorToken.textPrimary)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+
+                    if terminal == nil {
+                        Text("No terminal selected")
+                            .font(.system(size: 12, weight: .medium, design: .monospaced))
+                            .foregroundStyle(HeedTheme.ColorToken.textSecondary)
+                    }
+                }
+                .padding(18)
+            }
+            .heedHiddenScrollBars()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(HeedTheme.ColorToken.canvas)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("temporary-terminal-workspace")
     }
 
     private var transcriptWorkspace: some View {
@@ -165,6 +218,8 @@ struct WorkspaceShell: View {
     private func selectBranch(_ project: TerminalShellProject, _ branch: TerminalShellBranch) {
         terminalWorkspace.selectedProjectID = project.id
         terminalWorkspace.selectedBranchID = branch.id
+        selectDefaultTab(in: branch)
+        selectDefaultChangedFile(in: branch)
         selectedShellMode = .terminal
     }
 
@@ -182,10 +237,43 @@ struct WorkspaceShell: View {
         case .terminal:
             terminalWorkspace.selectedTerminalID = tab.id
         case .changes:
+            selectDefaultChangedFile(in: branch)
             break
         case .taskPrep, .tasks:
             break
         }
+    }
+
+    private func selectTasksTab() {
+        guard let branch = terminalWorkspace.selectedBranch,
+              let tasksTab = branch.tabs.first(where: { $0.kind == .tasks }) else {
+            selectedShellMode = .terminal
+            return
+        }
+
+        terminalWorkspace.selectedBranchTabID = tasksTab.id
+        selectedShellMode = .terminal
+    }
+
+    private func selectDefaultTab(in branch: TerminalShellBranch) {
+        let defaultTab = branch.tabs.first { $0.kind == .terminal } ?? branch.tabs.first
+
+        terminalWorkspace.selectedBranchTabID = defaultTab?.id ?? ""
+
+        if defaultTab?.kind == .terminal {
+            terminalWorkspace.selectedTerminalID = defaultTab?.id ?? ""
+        } else {
+            terminalWorkspace.selectedTerminalID = branch.terminals.first?.id ?? ""
+        }
+    }
+
+    private func selectDefaultChangedFile(in branch: TerminalShellBranch) {
+        guard let firstChangedFile = branch.changedFiles.first else {
+            terminalWorkspace.selectedChangedFileID = ""
+            return
+        }
+
+        terminalWorkspace.selectedChangedFileID = firstChangedFile.id
     }
 
     var utilityPrimaryStatus: String? {

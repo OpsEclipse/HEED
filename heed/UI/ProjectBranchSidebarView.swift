@@ -96,21 +96,25 @@ struct ProjectBranchSidebarView: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(branch.name)
+            .accessibilityValue(isSelected ? "selected" : "")
             .accessibilityIdentifier("branch-row-\(branch.id)")
 
             ForEach(branch.tabs) { tab in
+                let isSelectedTab = tab.id == workspace.selectedBranchTabID
+
                 Button {
                     onSelectTab(project, branch, tab)
                 } label: {
                     Text(tab.title)
-                        .font(.system(size: 11, weight: tab.id == workspace.selectedBranchTabID ? .semibold : .medium, design: .monospaced))
-                        .foregroundStyle(tab.id == workspace.selectedBranchTabID ? HeedTheme.ColorToken.textPrimary : HeedTheme.ColorToken.textSecondary)
+                        .font(.system(size: 11, weight: isSelectedTab ? .semibold : .medium, design: .monospaced))
+                        .foregroundStyle(isSelectedTab ? HeedTheme.ColorToken.textPrimary : HeedTheme.ColorToken.textSecondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.leading, 30)
                         .padding(.vertical, 3)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(tab.title)
+                .accessibilityValue(isSelectedTab ? "selected" : "")
                 .accessibilityIdentifier("branch-tab-\(tab.id)")
             }
         }
