@@ -31,6 +31,13 @@ final class heedUITests: XCTestCase {
         XCTAssertTrue(app.buttons["branch-row-heed-ui-revamp"].exists)
         XCTAssertTrue(app.buttons["branch-tab-heed-ui-revamp-terminal-1"].exists)
         XCTAssertTrue(app.buttons["branch-tab-heed-ui-revamp-changes"].exists)
+        XCTAssertTrue(app.otherElements["terminal-workspace"].exists)
+        XCTAssertTrue(app.buttons["terminal-tab-heed-ui-revamp-terminal-1"].exists)
+        XCTAssertTrue(app.staticTexts["Ready in branch context: ui-revamp"].exists)
+        XCTAssertTrue(app.otherElements["changed-files-pane"].exists)
+        XCTAssertTrue(app.staticTexts["UNSTAGED CHANGES"].exists)
+        XCTAssertTrue(app.staticTexts["heed/UI/WorkspaceShell.swift"].exists)
+        XCTAssertTrue(app.staticTexts["+ terminal tab strip"].exists)
 
         app.buttons["record-button"].click()
 

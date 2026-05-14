@@ -121,66 +121,21 @@ struct WorkspaceShell: View {
             Group {
                 switch selectedShellMode {
                 case .terminal:
-                    temporaryTerminalWorkspace
+                    HStack(spacing: 0) {
+                        TerminalWorkspaceView(workspace: terminalWorkspace)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                        ChangedFilesPane(
+                            files: terminalWorkspace.changedFiles,
+                            selectedFileID: terminalWorkspace.selectedChangedFileID
+                        )
+                    }
                 case .newSession:
                     transcriptWorkspace
                 }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    private var temporaryTerminalWorkspace: some View {
-        let project = terminalWorkspace.selectedProject
-        let branch = terminalWorkspace.selectedBranch
-        let tab = terminalWorkspace.selectedBranchTab
-        let terminal = terminalWorkspace.selectedTerminal
-
-        return VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 10) {
-                Text(project?.name ?? "no project")
-                Text("/")
-                    .foregroundStyle(HeedTheme.ColorToken.textSecondary)
-                Text(branch?.name ?? "no branch")
-                Text("/")
-                    .foregroundStyle(HeedTheme.ColorToken.textSecondary)
-                Text(tab?.title ?? "no tab")
-            }
-            .font(.system(size: 12, weight: .semibold, design: .monospaced))
-            .foregroundStyle(HeedTheme.ColorToken.textPrimary)
-            .padding(.horizontal, 18)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .frame(height: 42)
-            .overlay(alignment: .bottom) {
-                Rectangle()
-                    .fill(HeedTheme.ColorToken.borderStrong)
-                    .frame(height: HeedTheme.Stroke.brutalist)
-            }
-
-            ScrollView {
-                VStack(alignment: .leading, spacing: 8) {
-                    ForEach(Array((terminal?.promptLines ?? []).enumerated()), id: \.offset) { _, line in
-                        Text(line)
-                            .font(.system(size: 12, weight: .medium, design: .monospaced))
-                            .foregroundStyle(line.hasPrefix("$") ? HeedTheme.ColorToken.textSecondary : HeedTheme.ColorToken.textPrimary)
-                            .textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-
-                    if terminal == nil {
-                        Text("No terminal selected")
-                            .font(.system(size: 12, weight: .medium, design: .monospaced))
-                            .foregroundStyle(HeedTheme.ColorToken.textSecondary)
-                    }
-                }
-                .padding(18)
-            }
-            .heedHiddenScrollBars()
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(HeedTheme.ColorToken.canvas)
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("temporary-terminal-workspace")
     }
 
     private var transcriptWorkspace: some View {
