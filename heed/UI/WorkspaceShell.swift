@@ -121,21 +121,77 @@ struct WorkspaceShell: View {
             Group {
                 switch selectedShellMode {
                 case .terminal:
-                    HStack(spacing: 0) {
-                        TerminalWorkspaceView(workspace: terminalWorkspace)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-                        ChangedFilesPane(
-                            files: terminalWorkspace.changedFiles,
-                            selectedFileID: terminalWorkspace.selectedChangedFileID
-                        )
-                    }
+                    terminalModeWorkspace
                 case .newSession:
                     transcriptWorkspace
                 }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    @ViewBuilder
+    private var terminalModeWorkspace: some View {
+        switch terminalWorkspace.selectedBranchTab?.kind {
+        case .terminal:
+            terminalAndChangesWorkspace
+        case .changes:
+            changedFilesFocusedWorkspace
+        case .tasks:
+            branchPlaceholder(title: "TASKS")
+        case .taskPrep:
+            branchPlaceholder(title: "TASK PREP")
+        case nil:
+            terminalAndChangesWorkspace
+        }
+    }
+
+    private var terminalAndChangesWorkspace: some View {
+        GeometryReader { proxy in
+            HStack(spacing: 0) {
+                TerminalWorkspaceView(
+                    workspace: terminalWorkspace,
+                    onSelectTerminal: selectTerminal
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                if proxy.size.width >= 760 {
+                    ChangedFilesPane(
+                        files: terminalWorkspace.changedFiles,
+                        selectedFileID: terminalWorkspace.selectedChangedFileID
+                    )
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    private var changedFilesFocusedWorkspace: some View {
+        ChangedFilesPane(
+            files: terminalWorkspace.changedFiles,
+            selectedFileID: terminalWorkspace.selectedChangedFileID,
+            width: nil
+        )
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func branchPlaceholder(title: String) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(title)
+                .font(.system(size: 16, weight: .bold, design: .monospaced))
+                .foregroundStyle(HeedTheme.ColorToken.textPrimary)
+
+            Text(terminalWorkspace.selectedBranch?.name ?? "no branch")
+                .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                .foregroundStyle(HeedTheme.ColorToken.textSecondary)
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(HeedTheme.ColorToken.canvas)
+        .overlay {
+            Rectangle()
+                .stroke(HeedTheme.ColorToken.borderStrong, lineWidth: HeedTheme.Stroke.brutalist)
+        }
     }
 
     private var transcriptWorkspace: some View {
@@ -168,6 +224,12 @@ struct WorkspaceShell: View {
                 .transition(.opacity)
             }
         }
+    }
+
+    private func selectTerminal(_ terminal: TerminalShellTerminal) {
+        terminalWorkspace.selectedTerminalID = terminal.id
+        terminalWorkspace.selectedBranchTabID = terminal.id
+        selectedShellMode = .terminal
     }
 
     private func selectBranch(_ project: TerminalShellProject, _ branch: TerminalShellBranch) {

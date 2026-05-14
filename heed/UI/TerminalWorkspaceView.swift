@@ -2,6 +2,7 @@ import SwiftUI
 
 struct TerminalWorkspaceView: View {
     let workspace: TerminalShellWorkspace
+    let onSelectTerminal: (TerminalShellTerminal) -> Void
 
     private var selectedTerminal: TerminalShellTerminal? {
         workspace.selectedTerminal
@@ -32,11 +33,13 @@ struct TerminalWorkspaceView: View {
             Button { } label: {
                 Text("+")
                     .font(.system(size: 14, weight: .bold, design: .monospaced))
-                    .foregroundStyle(HeedTheme.ColorToken.textPrimary)
+                    .foregroundStyle(HeedTheme.ColorToken.textSecondary)
                     .frame(width: 42, height: 42)
             }
             .buttonStyle(.plain)
+            .disabled(true)
             .accessibilityLabel("Add terminal tab")
+            .accessibilityValue("disabled")
             .accessibilityIdentifier("terminal-tab-add")
 
             Spacer(minLength: 0)
@@ -54,7 +57,9 @@ struct TerminalWorkspaceView: View {
         let isSelected = terminal.id == selectedTerminal?.id
         let title = tabTitle(for: terminal, isSelected: isSelected)
 
-        return Button { } label: {
+        return Button {
+            onSelectTerminal(terminal)
+        } label: {
             Text(title)
                 .font(.system(size: 12, weight: isSelected ? .bold : .medium, design: .monospaced))
                 .foregroundStyle(isSelected ? HeedTheme.ColorToken.textPrimary : HeedTheme.ColorToken.textSecondary)

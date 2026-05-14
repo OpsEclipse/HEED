@@ -3,6 +3,17 @@ import SwiftUI
 struct ChangedFilesPane: View {
     let files: [TerminalShellChangedFile]
     let selectedFileID: String
+    let width: CGFloat?
+
+    init(
+        files: [TerminalShellChangedFile],
+        selectedFileID: String,
+        width: CGFloat? = 330
+    ) {
+        self.files = files
+        self.selectedFileID = selectedFileID
+        self.width = width
+    }
 
     private var selectedFile: TerminalShellChangedFile? {
         files.first { $0.id == selectedFileID }
@@ -20,8 +31,8 @@ struct ChangedFilesPane: View {
                 selectedFileSummary
             }
         }
-        .frame(width: 330)
-        .frame(maxHeight: .infinity, alignment: .topLeading)
+        .frame(width: width)
+        .frame(maxWidth: width == nil ? .infinity : width, maxHeight: .infinity, alignment: .topLeading)
         .background(HeedTheme.ColorToken.canvas)
         .overlay(alignment: .leading) {
             Rectangle()
@@ -90,6 +101,9 @@ struct ChangedFilesPane: View {
         .padding(.vertical, 6)
         .background(isSelected ? Color.white.opacity(0.10) : Color.clear)
         .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(file.status) \(file.path)")
+        .accessibilityValue(isSelected ? "selected" : "")
+        .accessibilityIdentifier("changed-file-row-\(file.id)")
     }
 
     @ViewBuilder
