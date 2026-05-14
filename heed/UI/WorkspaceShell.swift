@@ -47,9 +47,17 @@ struct WorkspaceShell: View {
 
                 HStack(spacing: 0) {
                     if isSidebarVisible {
-                        ProjectBranchSidebarView(workspace: terminalWorkspace) {
-                            selectedShellMode = .newSession
-                        }
+                        ProjectBranchSidebarView(
+                            workspace: terminalWorkspace,
+                            onTasks: {
+                                selectedShellMode = .newSession
+                            },
+                            onNewSession: {
+                                selectedShellMode = .newSession
+                            },
+                            onSelectBranch: selectBranch,
+                            onSelectTab: selectTab
+                        )
                         .transition(.move(edge: .leading).combined(with: .opacity))
                     }
 
@@ -111,36 +119,73 @@ struct WorkspaceShell: View {
                 .ignoresSafeArea()
 
             Group {
-                if isTaskPrepWorkspaceVisible {
-                    TaskPrepWorkspaceView(
-                        controller: taskPrepController,
-                        onClose: taskPrepController.reset
-                    )
-                    .transition(.move(edge: .trailing).combined(with: .opacity))
-                } else {
-                    TranscriptCanvasView(
-                        state: controller.state,
-                        session: displayedSession,
-                        micSegments: displayedMicSegments,
-                        systemSegments: displayedSystemSegments,
-                        sourceProcessingStates: controller.sourceProcessingStates,
-                        sourceJumpRequest: taskAnalysisController.sourceJumpRequest,
-                        highlightedSegmentID: taskAnalysisController.highlightedSegmentID,
-                        appendixFocusNonce: taskAnalysisController.sectionFocusNonce,
-                        autoScrollEnabled: $controller.autoScrollEnabled
-                    ) {
-                        TaskAnalysisSectionView(
-                            controller: taskAnalysisController,
-                            taskPrepController: taskPrepController,
-                            displayedSession: displayedSession
-                        )
-                        .padding(.top, displayedSession?.segments.isEmpty == false ? 16 : 6)
-                    }
-                    .transition(.opacity)
+                switch selectedShellMode {
+                case .terminal:
+                    transcriptWorkspace
+                case .newSession:
+                    transcriptWorkspace
                 }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var transcriptWorkspace: some View {
+        Group {
+            if isTaskPrepWorkspaceVisible {
+                TaskPrepWorkspaceView(
+                    controller: taskPrepController,
+                    onClose: taskPrepController.reset
+                )
+                .transition(.move(edge: .trailing).combined(with: .opacity))
+            } else {
+                TranscriptCanvasView(
+                    state: controller.state,
+                    session: displayedSession,
+                    micSegments: displayedMicSegments,
+                    systemSegments: displayedSystemSegments,
+                    sourceProcessingStates: controller.sourceProcessingStates,
+                    sourceJumpRequest: taskAnalysisController.sourceJumpRequest,
+                    highlightedSegmentID: taskAnalysisController.highlightedSegmentID,
+                    appendixFocusNonce: taskAnalysisController.sectionFocusNonce,
+                    autoScrollEnabled: $controller.autoScrollEnabled
+                ) {
+                    TaskAnalysisSectionView(
+                        controller: taskAnalysisController,
+                        taskPrepController: taskPrepController,
+                        displayedSession: displayedSession
+                    )
+                    .padding(.top, displayedSession?.segments.isEmpty == false ? 16 : 6)
+                }
+                .transition(.opacity)
+            }
+        }
+    }
+
+    private func selectBranch(_ project: TerminalShellProject, _ branch: TerminalShellBranch) {
+        terminalWorkspace.selectedProjectID = project.id
+        terminalWorkspace.selectedBranchID = branch.id
+        selectedShellMode = .terminal
+    }
+
+    private func selectTab(
+        _ project: TerminalShellProject,
+        _ branch: TerminalShellBranch,
+        _ tab: TerminalShellBranchTab
+    ) {
+        terminalWorkspace.selectedProjectID = project.id
+        terminalWorkspace.selectedBranchID = branch.id
+        terminalWorkspace.selectedBranchTabID = tab.id
+        selectedShellMode = .terminal
+
+        switch tab.kind {
+        case .terminal:
+            terminalWorkspace.selectedTerminalID = tab.id
+        case .changes:
+            break
+        case .taskPrep, .tasks:
+            break
+        }
     }
 
     var utilityPrimaryStatus: String? {

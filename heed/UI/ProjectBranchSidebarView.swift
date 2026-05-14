@@ -2,11 +2,14 @@ import SwiftUI
 
 struct ProjectBranchSidebarView: View {
     let workspace: TerminalShellWorkspace
+    let onTasks: () -> Void
     let onNewSession: () -> Void
+    let onSelectBranch: (TerminalShellProject, TerminalShellBranch) -> Void
+    let onSelectTab: (TerminalShellProject, TerminalShellBranch, TerminalShellBranchTab) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            sidebarAction("tasks", identifier: "sidebar-tasks") { }
+            sidebarAction("tasks", identifier: "sidebar-tasks", action: onTasks)
             sidebarAction("new session", identifier: "sidebar-new-session", action: onNewSession)
 
             Rectangle()
@@ -51,6 +54,7 @@ struct ProjectBranchSidebarView: View {
                 .padding(.vertical, 8)
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(title)
         .accessibilityIdentifier(identifier)
     }
 
@@ -59,19 +63,22 @@ struct ProjectBranchSidebarView: View {
             Text(project.name)
                 .font(.system(size: 12, weight: .semibold, design: .monospaced))
                 .foregroundStyle(HeedTheme.ColorToken.textPrimary)
+                .accessibilityLabel(project.name)
                 .accessibilityIdentifier("project-row-\(project.id)")
 
             ForEach(project.branches) { branch in
-                branchSection(branch)
+                branchSection(branch, in: project)
             }
         }
     }
 
-    private func branchSection(_ branch: TerminalShellBranch) -> some View {
+    private func branchSection(_ branch: TerminalShellBranch, in project: TerminalShellProject) -> some View {
         let isSelected = branch.id == workspace.selectedBranchID
 
         return VStack(alignment: .leading, spacing: 2) {
-            Button { } label: {
+            Button {
+                onSelectBranch(project, branch)
+            } label: {
                 Text(branch.name)
                     .font(.system(size: 12, weight: isSelected ? .bold : .medium, design: .monospaced))
                     .foregroundStyle(HeedTheme.ColorToken.textPrimary)
@@ -88,10 +95,13 @@ struct ProjectBranchSidebarView: View {
                     }
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(branch.name)
             .accessibilityIdentifier("branch-row-\(branch.id)")
 
             ForEach(branch.tabs) { tab in
-                Button { } label: {
+                Button {
+                    onSelectTab(project, branch, tab)
+                } label: {
                     Text(tab.title)
                         .font(.system(size: 11, weight: tab.id == workspace.selectedBranchTabID ? .semibold : .medium, design: .monospaced))
                         .foregroundStyle(tab.id == workspace.selectedBranchTabID ? HeedTheme.ColorToken.textPrimary : HeedTheme.ColorToken.textSecondary)
@@ -100,6 +110,7 @@ struct ProjectBranchSidebarView: View {
                         .padding(.vertical, 3)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(tab.title)
                 .accessibilityIdentifier("branch-tab-\(tab.id)")
             }
         }
