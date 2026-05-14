@@ -3,6 +3,13 @@ import Testing
 @testable import heed
 
 struct WorkspaceShellTests {
+    @Test func brutalistThemeTokensStaySharpAndHighContrast() {
+        #expect(HeedTheme.Opacity.brutalistBorder == 0.6)
+        #expect(HeedTheme.Opacity.brutalistDivider == 0.3)
+        #expect(HeedTheme.Corner.brutalist == 0)
+        #expect(HeedTheme.Stroke.brutalist == 1)
+    }
+
     @Test func terminalShellFixtureDefaultsToSelectedBranchAndTerminal() {
         let state = TerminalShellWorkspace.preview
 

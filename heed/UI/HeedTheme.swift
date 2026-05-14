@@ -2,18 +2,24 @@ import SwiftUI
 
 enum HeedTheme {
     enum ColorToken {
-        static let canvas = Color(red: 0.02, green: 0.02, blue: 0.02)
-        static let panel = Color(red: 0.05, green: 0.05, blue: 0.05)
-        static let panelRaised = Color(red: 0.09, green: 0.09, blue: 0.09)
-        static let textPrimary = Color(red: 0.96, green: 0.96, blue: 0.94)
-        static let textSecondary = Color(red: 0.58, green: 0.58, blue: 0.55)
-        static let borderSubtle = Color.white.opacity(0.14)
-        static let borderStrong = Color.white.opacity(0.28)
+        static let canvas = Color.black
+        static let panel = Color.black
+        static let panelRaised = Color(red: 0.04, green: 0.04, blue: 0.04)
+        static let textPrimary = Color.white
+        static let textSecondary = Color.white.opacity(0.58)
+        static let borderSubtle = Color.white.opacity(Opacity.brutalistDivider)
+        static let borderStrong = Color.white.opacity(Opacity.brutalistBorder)
         static let shadow = Color.black.opacity(0.38)
         static let recording = Color(red: 0.88, green: 0.15, blue: 0.18)
         static let warning = Color(red: 0.73, green: 0.54, blue: 0.20)
         static let success = Color(red: 0.38, green: 0.72, blue: 0.46)
         static let actionYellow = Color(red: 0.72, green: 0.91, blue: 0.20)
+    }
+
+    enum Opacity {
+        static let brutalistBorder: Double = 0.6
+        static let brutalistDivider: Double = 0.3
+        static let disabled: Double = 0.32
     }
 
     enum Space {
@@ -28,14 +34,16 @@ enum HeedTheme {
     }
 
     enum Corner {
+        static let brutalist: CGFloat = 0
         static let pill: CGFloat = 999
-        static let panel: CGFloat = 18
-        static let button: CGFloat = 14
+        static let panel: CGFloat = 8
+        static let button: CGFloat = 0
     }
 
     enum Stroke {
         static let hairline: CGFloat = 1
         static let emphasis: CGFloat = 1.5
+        static let brutalist: CGFloat = 1
     }
 
     enum Layout {
