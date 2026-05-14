@@ -18,6 +18,7 @@ struct TopNavView: View {
             }
             .buttonStyle(.plain)
             .foregroundStyle(HeedTheme.ColorToken.textPrimary)
+            .accessibilityLabel("Toggle sidebar")
             .accessibilityIdentifier("sidebar-toggle")
 
             Rectangle()
@@ -37,6 +38,7 @@ struct TopNavView: View {
                 }
                 .accessibilityIdentifier("shell-search")
                 .frame(maxWidth: .infinity)
+                .disabled(true)
 
             Menu {
                 Button("Xcode") { }
@@ -61,6 +63,7 @@ struct TopNavView: View {
             }
             .buttonStyle(.plain)
             .foregroundStyle(HeedTheme.ColorToken.textPrimary)
+            .accessibilityLabel("Open settings")
             .accessibilityIdentifier("settings-button")
         }
         .frame(height: 44)
