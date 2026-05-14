@@ -9,9 +9,11 @@ The app still has one main macOS window today.
 - The root view renders `WorkspaceShell`, which opens into a brutalist terminal-first shell [a stark interface style built from hard edges, visible structure, and little decoration].
 - The primary canvas is black with high-contrast white borders.
 - The full-width top nav holds the sidebar toggle, disabled search field, `Open IDE` menu, and settings button.
-- The left sidebar lists `tasks`, `new session`, projects, branches, and branch-specific tabs.
-- The center pane shows terminal tabs for the selected branch.
-- The right pane shows unstaged changed files and readable summaries, not raw code editing.
+- The left sidebar visually lists `tasks`, `new session`, projects, branches, and branch-specific tabs.
+- The center pane visually shows terminal tabs for the selected branch.
+- The right pane visually shows unstaged changed files and readable summaries, not raw code editing.
+- The shell's project, branch, terminal, and changed-file content is fixture-backed [hard-coded sample data used by the UI] in `TerminalShellModels.swift`.
+- The shell does not yet discover real Git repositories, run live terminals for multiple projects or branches, or read actual unstaged Git diffs [file changes reported by Git].
 - The recording and transcript flow remains available through `new session`.
 - When `newSession` mode is active, the existing transcript canvas, floating record button, utility rail, compile flow, and task-prep workspace continue to use the existing controllers.
 - The window opens at a fixed default size and hides the normal macOS title bar controls.
@@ -44,7 +46,7 @@ The app still has one main macOS window today.
 
 ## Refresh Status
 
-The shell refresh is now implemented in the app code. The main remaining gaps are polish, discoverability, and UI automation stability.
+The shell refresh is now implemented in the app code. The main remaining gaps are real data backing, polish, discoverability, and UI automation stability.
 
 The current shell now uses:
 
@@ -54,6 +56,8 @@ The current shell now uses:
 - a center terminal workspace with branch-scoped terminal tabs
 - a right changed-files pane with readable file summaries
 - the existing transcript canvas, utility rail, and floating record button inside `newSession` mode
+
+The shell's project tree, branch list, terminal text, terminal tabs, and changed-file summaries are static fixtures [hard-coded sample UI] in this first pass. Live Git discovery, real branch scanning, live multi-project terminal sessions, and actual unstaged diff reading are planned, not shipped.
 
 ## Current Main Surfaces
 
@@ -65,10 +69,11 @@ This is the default visual focus.
 - White borders divide the top nav, sidebar, center pane, and right pane.
 - The top nav spans the full width and holds the sidebar toggle, search field, `Open IDE`, and settings.
 - The sidebar can be toggled on and off.
-- The sidebar lists `tasks`, `new session`, projects, branches, and branch-specific tabs.
-- The selected branch controls the center terminal tabs and the changed-file summaries.
-- The center pane shows terminal tabs for the selected branch.
-- The right pane shows unstaged changed files and short readable summaries. It does not expose raw code editing.
+- The sidebar visually lists `tasks`, `new session`, projects, branches, and branch-specific tabs.
+- The selected fixture branch [hard-coded sample branch] controls the center terminal tabs and the changed-file summaries.
+- The center pane shows fixture terminal tabs for the selected branch.
+- The right pane shows fixture unstaged changed files and short readable summaries. It does not expose raw code editing.
+- It does not yet read live Git branch state, open live branch terminals, or read actual unstaged diffs.
 
 ### New Session Transcript Canvas
 
@@ -89,8 +94,8 @@ The sidebar remains important, but it is optional in the layout.
 - It sits on the left edge of the window.
 - It can be toggled on and off.
 - It feels like a compact project tree that belongs to the shell, not a floating drawer.
-- It lists `tasks` and `new session` actions above the project tree.
-- It lists projects, branches, and branch-specific side tabs.
+- It lists `tasks` and `new session` actions above the fixture project tree.
+- It lists fixture projects, branches, and branch-specific side tabs.
 - It uses narrow rows and a left accent for the selected branch.
 
 ### Floating Transport
@@ -125,7 +130,7 @@ The transcript review flow stays in the same reading surface.
 - The compiler should keep one deliverable as one task instead of splitting one feature into many smaller tasks.
 - Each row can use `Show source` to jump back to evidence in the transcript.
 - Each task row now uses `Prepare context` instead of the old placeholder `Spawn agent` action.
-- The current shipped build uses real OpenAI calls in the normal app and fixture data only for UI-test mode.
+- The current shipped build uses real OpenAI calls in the normal task-compilation app flow and fixture task data only for UI-test mode. This does not apply to the terminal shell project tree, which is fixture-backed in the normal app.
 
 ### Task Prep Workspace
 
@@ -170,9 +175,9 @@ The right pane is the stable handoff draft.
 1. App launches into the terminal shell.
 2. The top nav, project and branch sidebar, center terminal tabs, and right changed-files pane get visual priority.
 3. The user can toggle the sidebar from the top nav.
-4. The user can select projects, branches, and branch-specific tabs from the sidebar.
-5. Selecting a terminal tab keeps the center pane focused on that branch terminal.
-6. Selecting the changes tab focuses the changed-files pane.
+4. The user can select fixture projects, fixture branches, and fixture branch-specific tabs from the sidebar.
+5. Selecting a fixture terminal tab keeps the center pane focused on that sample branch terminal.
+6. Selecting the changes tab focuses the fixture changed-files pane.
 7. The user opens the recording flow from `new session` in the sidebar.
 8. Before recording starts, the transcript canvas shows only `Press record to begin the full transcript`.
 9. The user starts recording from the floating yellow button.
@@ -262,11 +267,11 @@ These modules are now in code.
 - `TopNavView`
   Renders the full-width top nav with sidebar toggle, search, `Open IDE`, and settings controls.
 - `ProjectBranchSidebarView`
-  Renders `tasks`, `new session`, projects, branches, and branch-specific tabs.
+  Renders `tasks`, `new session`, fixture projects, fixture branches, and branch-specific tabs.
 - `TerminalWorkspaceView`
-  Renders the selected branch terminal tabs and terminal body.
+  Renders the selected fixture branch terminal tabs and terminal body.
 - `ChangedFilesPane`
-  Renders unstaged changed files and readable summaries.
+  Renders fixture unstaged changed files and readable summaries.
 - `TranscriptCanvasView`
   Owns the `newSession` black canvas, centered reading column, and recording or processing states.
 - `SourceTranscriptPanelsView`

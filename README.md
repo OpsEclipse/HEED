@@ -2,7 +2,7 @@
 
 Heed is a macOS app for local meeting transcription and task prep. It captures microphone audio and system audio into separate local temp files during recording, transcribes both sources on-device after stop, saves transcript sessions locally, and can turn a finished transcript into compiled tasks plus a streamed task-prep workspace.
 
-Today, the repo contains a real first v1 path. The app opens into a brutalist terminal-first shell with a full-width top nav, a project and branch sidebar, terminal tabs in the center pane, and an unstaged-changes pane on the right. The recording and transcript flow stays available from `new session`, with local permission gating, separate source capture files, batch transcription after stop, Whisper-backed local transcription through a bundled helper tool, JSON session autosave, relaunch recovery, clipboard copy, Keychain-backed OpenAI and Composio API key settings, a `Compile tasks` flow, and a split task-prep workspace that opens from compiled transcript tasks.
+Today, the repo contains a real first v1 path. The app opens into a shipped brutalist terminal-first shell with a full-width top nav, a project and branch sidebar, terminal tabs in the center pane, and an unstaged-changes pane on the right. That shell surface is real, but the project, branch, terminal, and changed-file content is still fixture-backed [hard-coded sample data used by the UI] in `TerminalShellModels.swift`. It does not yet discover real Git repositories, run live terminals for multiple projects or branches, or read actual unstaged Git diffs [file changes reported by Git]. The recording and transcript flow stays available from `new session`, with local permission gating, separate source capture files, batch transcription after stop, Whisper-backed local transcription through a bundled helper tool, JSON session autosave, relaunch recovery, clipboard copy, Keychain-backed OpenAI and Composio API key settings, a `Compile tasks` flow, and a split task-prep workspace that opens from compiled transcript tasks.
 
 The prep workspace has two panes. The left side starts as a chat thread with streamed GPT-5.4 replies [replies that arrive in small pieces while they are generated]. The right side is a context brief panel that pins a stable structured draft after each completed turn. The model can ask for more transcript detail through a read-only `get_meeting_transcript` tool that is scoped to the selected session. When a Composio API key is saved, the prep agent also gets Composio MCP tools [remote tool server access] scoped to Gmail, Google Calendar, and Google Drive. If the model asks to spawn an agent, the app blocks that request until the user gives explicit approval, then turns the left pane into an integrated Codex terminal seeded with a compressed handoff. The prep chat, prep brief, and terminal output do not persist [stay saved] to disk.
 
@@ -22,9 +22,10 @@ Important current facts:
 - The app is a single `WindowGroup`.
 - The default shell is terminal-first. It uses a brutalist black canvas with high-contrast white borders.
 - The full-width top nav contains a sidebar toggle, disabled search field, `Open IDE` menu, and settings button.
-- The left sidebar lists `tasks`, `new session`, projects, branches, and branch-specific side tabs.
-- The center pane shows terminal tabs for the selected branch.
-- The right pane shows unstaged changed files and readable summaries instead of raw code editing.
+- The left sidebar visually lists `tasks`, `new session`, projects, branches, and branch-specific side tabs.
+- The center pane visually shows terminal tabs for the selected branch.
+- The right pane visually shows unstaged changed files and readable summaries instead of raw code editing.
+- The shell's project, branch, terminal, and changed-file data is static fixture UI [hard-coded sample UI]. Real Git discovery, live multi-project terminals, and actual unstaged diff reading are planned, not shipped.
 - `new session` opens the existing recording and transcript flow.
 - Task prep still opens from compiled transcript tasks through `Prepare context`.
 - While recording, the app shows capture status instead of live transcript text.
