@@ -6,32 +6,37 @@ The app still has one main macOS window today.
 
 - App launch opens one window from [`../heed/heedApp.swift`](../heed/heedApp.swift).
 - That window renders [`../heed/ContentView.swift`](../heed/ContentView.swift).
-- The root view renders `WorkspaceShell`, which is a transcript-first shell with a centered transcript canvas.
-- The sessions list is in a hidden-by-default left sidebar column with a compact tree-style treatment.
-- The main record or stop action lives in one floating yellow button.
+- The root view renders `WorkspaceShell`, which opens into a brutalist terminal-first shell [a stark interface style built from hard edges, visible structure, and little decoration].
+- The primary canvas is black with high-contrast white borders.
+- The full-width top nav holds the sidebar toggle, disabled search field, `Open IDE` menu, and settings button.
+- The left sidebar lists `tasks`, `new session`, projects, branches, and branch-specific tabs.
+- The center pane shows terminal tabs for the selected branch.
+- The right pane shows unstaged changed files and readable summaries, not raw code editing.
+- The recording and transcript flow remains available through `new session`.
+- When `newSession` mode is active, the existing transcript canvas, floating record button, utility rail, compile flow, and task-prep workspace continue to use the existing controllers.
 - The window opens at a fixed default size and hides the normal macOS title bar controls.
-- The bottom utility rail keeps the center transport clear and keeps `Compile tasks`, `Set API key`, `Copy text`, and `Full screen` on the right when the selected session is eligible for task review.
+- The bottom utility rail appears in `newSession` mode and keeps the center transport clear. It keeps `Compile tasks`, `Set API key`, `Copy text`, and `Full screen` on the right when the selected session is eligible for task review.
 - `Set API key` opens one sheet for both OpenAI and Composio API keys.
-- The controller still has `.txt` and `.md` file export code, but those file export actions are not surfaced in the current shell.
+- The controller still has `.txt` and `.md` file export code, but those file export actions are not surfaced in the current terminal shell.
 - While recording, the canvas shows capture state only. It does not stream transcript text live.
 - After stop, the shell switches into a processing state while both sources are transcribed.
 - Finished sessions show two transcript panels, one for `MIC` and one for `SYSTEM`.
-- `Prepare context` now replaces the transcript canvas with a split task-prep workspace.
+- `Prepare context` replaces the transcript canvas with a split task-prep workspace after tasks are compiled from a transcript.
 
 ## Current Implemented States
 
 - `idle`
-  The app shows the transcript workspace and one empty-state prompt.
+  In `newSession` mode, the app shows the transcript workspace and one empty-state prompt.
 - `ready to record`
-  The app can request recording on the next `Record` click.
+  In `newSession` mode, the app can request recording on the next `Record` click.
 - `recording`
-  The timer runs while mic and system audio are captured into separate temp files. The canvas does not show live transcript rows.
+  In `newSession` mode, the timer runs while mic and system audio are captured into separate temp files. The canvas does not show live transcript rows.
 - `stopping`
-  The app keeps the same screen while it stops capture and moves into post-stop work.
+  In `newSession` mode, the app keeps the same screen while it stops capture and moves into post-stop work.
 - `processing`
-  The app shows per-source transcription progress after stop. This is the main wait state before the finished transcript appears.
+  In `newSession` mode, the app shows per-source transcription progress after stop. This is the main wait state before the finished transcript appears.
 - `error`
-  The shell shows a blocked status. Detailed recovery text is tracked in the controller, but the refreshed shell does not render that full message yet. Partial transcripts still stay visible when they exist.
+  In `newSession` mode, the shell shows a blocked status. Detailed recovery text is tracked in the controller, but the refreshed shell does not render that full message yet. Partial transcripts still stay visible when they exist.
 - `post-transcript task review`
   A completed transcript with real text can show an inline `Suggested tasks` appendix after the user clicks `Compile tasks`.
 - `task prep workspace`
@@ -43,19 +48,34 @@ The shell refresh is now implemented in the app code. The main remaining gaps ar
 
 The current shell now uses:
 
-- a centered transcript column
-- a compact left sidebar column that reads like a file tree
-- a muted bottom utility rail with sparse text actions
-- one empty-state prompt inside the transcript area
-- a floating bottom-center yellow record or stop button
+- a brutalist black shell with high-contrast white borders
+- a full-width top nav with sidebar, search, `Open IDE`, and settings controls
+- a compact left sidebar for tasks, new session, projects, branches, and branch-specific tabs
+- a center terminal workspace with branch-scoped terminal tabs
+- a right changed-files pane with readable file summaries
+- the existing transcript canvas, utility rail, and floating record button inside `newSession` mode
 
 ## Current Main Surfaces
 
-### Transcript Canvas
+### Terminal Shell
 
 This is the default visual focus.
 
-- The canvas fills the window with a black background.
+- The shell fills the window with a black background.
+- White borders divide the top nav, sidebar, center pane, and right pane.
+- The top nav spans the full width and holds the sidebar toggle, search field, `Open IDE`, and settings.
+- The sidebar can be toggled on and off.
+- The sidebar lists `tasks`, `new session`, projects, branches, and branch-specific tabs.
+- The selected branch controls the center terminal tabs and the changed-file summaries.
+- The center pane shows terminal tabs for the selected branch.
+- The right pane shows unstaged changed files and short readable summaries. It does not expose raw code editing.
+
+### New Session Transcript Canvas
+
+This remains the recording and transcript surface.
+
+- `new session` opens the transcript flow from the left sidebar.
+- The transcript canvas fills the main workspace with a black background.
 - The transcript sits in a centered reading column.
 - Saved and live sessions use the same main reading surface.
 - When there is no transcript yet, the canvas shows only `Press record to begin the full transcript`.
@@ -64,17 +84,18 @@ This is the default visual focus.
 
 ### Sidebar
 
-The sidebar remains important, but it becomes optional in the layout.
+The sidebar remains important, but it is optional in the layout.
 
 - It sits on the left edge of the window.
 - It can be toggled on and off.
-- It feels like a compact file-tree panel that belongs to the shell, not a floating drawer.
-- It lists only session titles taken from the first transcript line.
-- It uses narrow rows, small icons, and a left accent for the selected row.
+- It feels like a compact project tree that belongs to the shell, not a floating drawer.
+- It lists `tasks` and `new session` actions above the project tree.
+- It lists projects, branches, and branch-specific side tabs.
+- It uses narrow rows and a left accent for the selected branch.
 
 ### Floating Transport
 
-The main record or stop action is one flat floating button.
+The main record or stop action is one flat floating button in `newSession` mode.
 
 - Preferred location: bottom center
 - Fallback location: top right below narrow widths
@@ -84,7 +105,7 @@ The main record or stop action is one flat floating button.
 
 ### Utility Rail
 
-The bottom rail stays visually quiet.
+The bottom rail stays visually quiet in `newSession` mode.
 
 - It sits flush with the bottom edge of the window.
 - It keeps the record button centered without extra status copy around it.
@@ -146,64 +167,73 @@ The right pane is the stable handoff draft.
 
 ## Current Interaction Pattern
 
-1. App launches into the main transcript canvas.
-2. The transcript surface gets the visual priority, not the sessions list.
-3. The user can open the sidebar when they want session history.
-4. Opening the sidebar shifts the transcript workspace to the right instead of covering it.
-5. Before recording starts, the main canvas shows only `Press record to begin the full transcript`.
-6. The user starts recording from the floating yellow button.
-7. The app records mic and system audio into separate temp files.
-8. The user can copy transcript text or toggle fullscreen from the bottom utility rail.
-9. The user stops recording from the same floating button.
-10. The shell enters a processing state while it batch-transcribes both sources.
-11. The finished transcript stays in place for review instead of switching to a different screen.
-12. Finished sessions show two transcript panels, one for `MIC` and one for `SYSTEM`.
-13. If the finished transcript has usable text, the user can click `Compile tasks`.
-14. The review result opens inline below the transcript and keeps the transcript visible during loading, retry, and recompile states.
-15. The user can click `Prepare context` on one task.
-16. The app swaps the main canvas into the split prep workspace.
-17. The first assistant turn streams into the left chat pane.
-18. If the model asks for more evidence, the service uses a read-only transcript tool for the selected session only.
-19. If a Composio API key is saved, the service also gives the prep agent Gmail, Google Calendar, and Google Drive tools through Composio MCP [a remote tool server protocol].
-20. The right panel pins a stable brief after the turn completes.
-21. If the model asks to spawn, the right panel shows the approval request and the user can click `Approve spawn`.
-22. A successful approval turns the left pane into an integrated terminal and starts `codex --model gpt-5.2-codex --no-alt-screen` with a compressed handoff.
-23. Closing the workspace, switching sessions, or starting prep for another task clears the prep chat, brief, and terminal output because they are intentionally temporary.
+1. App launches into the terminal shell.
+2. The top nav, project and branch sidebar, center terminal tabs, and right changed-files pane get visual priority.
+3. The user can toggle the sidebar from the top nav.
+4. The user can select projects, branches, and branch-specific tabs from the sidebar.
+5. Selecting a terminal tab keeps the center pane focused on that branch terminal.
+6. Selecting the changes tab focuses the changed-files pane.
+7. The user opens the recording flow from `new session` in the sidebar.
+8. Before recording starts, the transcript canvas shows only `Press record to begin the full transcript`.
+9. The user starts recording from the floating yellow button.
+10. The app records mic and system audio into separate temp files.
+11. The user can copy transcript text or toggle fullscreen from the bottom utility rail while in `newSession` mode.
+12. The user stops recording from the same floating button.
+13. The shell enters a processing state while it batch-transcribes both sources.
+14. The finished transcript stays in place for review instead of switching to a different screen.
+15. Finished sessions show two transcript panels, one for `MIC` and one for `SYSTEM`.
+16. If the finished transcript has usable text, the user can click `Compile tasks`.
+17. The review result opens inline below the transcript and keeps the transcript visible during loading, retry, and recompile states.
+18. The user can click `Prepare context` on one compiled transcript task.
+19. The app swaps the transcript canvas into the split prep workspace.
+20. The first assistant turn streams into the left chat pane.
+21. If the model asks for more evidence, the service uses a read-only transcript tool for the selected session only.
+22. If a Composio API key is saved, the service also gives the prep agent Gmail, Google Calendar, and Google Drive tools through Composio MCP [a remote tool server protocol].
+23. The right panel pins a stable brief after the turn completes.
+24. If the model asks to spawn, the right panel shows the approval request and the user can click `Approve spawn`.
+25. A successful approval turns the left pane into an integrated terminal and starts `codex --model gpt-5.2-codex --no-alt-screen` with a compressed handoff.
+26. Closing the workspace, switching sessions, or starting prep for another task clears the prep chat, brief, and terminal output because they are intentionally temporary.
 
 ## Current UI Behavior
 
 ### Idle Or Ready
 
+- This behavior applies inside `newSession` mode.
 - Keep the screen sparse.
 - Show only the prompt `Press record to begin the full transcript`.
 - Keep the floating button visible so the next action is obvious.
 
 ### Recording
 
+- This behavior applies inside `newSession` mode.
 - Keep the transcript area calm while capture is running.
 - Make recording state obvious through the button label.
 - Do not add live transcript rows above or below the capture surface.
 
 ### Processing
 
+- This behavior applies inside `newSession` mode.
 - Keep the same layout.
 - Show that the app is transcribing both sources after stop.
 - Keep source-level status visible until both transcripts are ready.
 
 ### Stopping
 
+- This behavior applies inside `newSession` mode.
 - Keep the same layout.
 - Freeze major controls except the state needed for clear feedback.
 - Show that the app is finishing work without replacing the transcript surface.
 
 ### Error Or Permission Block
 
+- This behavior applies inside `newSession` mode.
 - Show a clear blocked state in the shell.
 - Do not pretend detailed guidance is visible until the shell actually renders `errorMessage`.
 - Preserve the overall layout so the app does not feel like it jumped into a different mode.
 
 ### Reviewing A Saved Session
 
+- This behavior applies inside `newSession` mode.
 - Reuse the same transcript canvas.
 - Keep copy and fullscreen available in the bottom rail.
 - Let the sidebar support browsing without becoming the main focus.
@@ -229,8 +259,16 @@ These modules are now in code.
 
 - `WorkspaceShell`
   Owns the high-level window layout.
+- `TopNavView`
+  Renders the full-width top nav with sidebar toggle, search, `Open IDE`, and settings controls.
+- `ProjectBranchSidebarView`
+  Renders `tasks`, `new session`, projects, branches, and branch-specific tabs.
+- `TerminalWorkspaceView`
+  Renders the selected branch terminal tabs and terminal body.
+- `ChangedFilesPane`
+  Renders unstaged changed files and readable summaries.
 - `TranscriptCanvasView`
-  Owns the main black canvas, centered reading column, and recording or processing states.
+  Owns the `newSession` black canvas, centered reading column, and recording or processing states.
 - `SourceTranscriptPanelsView`
   Renders the split `MIC` and `SYSTEM` transcript panels for completed sessions.
 - `TaskAnalysisSectionView`
@@ -244,11 +282,11 @@ These modules are now in code.
 - `TaskPrepContextPanelView`
   Renders the right-side stable brief and spawn approval state.
 - `SessionSidebarView`
-  Shows session titles and selection state.
+  Still exists in code for the older session-list surface, but the current shell uses `ProjectBranchSidebarView`.
 - `UtilityRailView`
-  Renders quiet status text and text-only utility actions at the bottom edge.
+  Renders quiet status text and text-only utility actions at the bottom edge in `newSession` mode.
 - `FloatingTransportView`
-  Renders the one floating record or stop button.
+  Renders the one floating record or stop button in `newSession` mode.
 - `WindowAccessView`
   Resolves the backing `NSWindow` so the shell can drive fullscreen state and hide standard window controls.
 
