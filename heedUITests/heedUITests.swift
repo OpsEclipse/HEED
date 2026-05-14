@@ -24,10 +24,13 @@ final class heedUITests: XCTestCase {
         XCTAssertTrue(app.textFields["shell-search"].exists)
         XCTAssertTrue(app.buttons["open-ide-menu"].exists)
         XCTAssertTrue(app.buttons["settings-button"].exists)
-
-        let sidebarToggle = app.buttons["sidebar-toggle"]
-        sidebarToggle.click()
-        XCTAssertTrue(app.otherElements["session-sidebar"].waitForExistence(timeout: uiTimeout))
+        XCTAssertTrue(app.otherElements["project-branch-sidebar"].exists)
+        XCTAssertTrue(app.buttons["sidebar-tasks"].exists)
+        XCTAssertTrue(app.buttons["sidebar-new-session"].exists)
+        XCTAssertTrue(app.staticTexts["heed"].exists)
+        XCTAssertTrue(app.buttons["branch-row-heed-ui-revamp"].exists)
+        XCTAssertTrue(app.buttons["branch-tab-heed-ui-revamp-terminal-1"].exists)
+        XCTAssertTrue(app.buttons["branch-tab-heed-ui-revamp-changes"].exists)
 
         app.buttons["record-button"].click()
 

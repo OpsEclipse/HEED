@@ -2,14 +2,21 @@ import AppKit
 import Combine
 import SwiftUI
 
+enum ShellMode: Equatable {
+    case terminal
+    case newSession
+}
+
 struct WorkspaceShell: View {
     @ObservedObject var controller: RecordingController
     @ObservedObject var taskAnalysisController: TaskAnalysisController
     @ObservedObject var taskPrepController: TaskPrepController
     @ObservedObject var apiKeySettingsViewModel: APIKeySettingsViewModel
-    @State private var isSidebarVisible = false
+    @State private var isSidebarVisible = true
     @State private var isAPIKeySettingsPresented = false
     @State private var searchText = ""
+    @State private var terminalWorkspace = TerminalShellWorkspace.preview
+    @State private var selectedShellMode: ShellMode = .terminal
     @StateObject private var windowController = WorkspaceWindowController()
 
     private var displayedSession: TranscriptSession? {
@@ -40,14 +47,9 @@ struct WorkspaceShell: View {
 
                 HStack(spacing: 0) {
                     if isSidebarVisible {
-                        SessionSidebarView(
-                            sessions: controller.sessions,
-                            selectedSessionID: controller.selectedSessionID,
-                            activeSessionID: controller.activeSession?.id,
-                            onSelect: { sessionID in
-                                controller.selectSession(sessionID)
-                            }
-                        )
+                        ProjectBranchSidebarView(workspace: terminalWorkspace) {
+                            selectedShellMode = .newSession
+                        }
                         .transition(.move(edge: .leading).combined(with: .opacity))
                     }
 
