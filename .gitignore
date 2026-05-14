@@ -1,3 +1,4 @@
 .build/
 Tools/WhisperChunkCLI/.build/
 codex/agents/
+.superpowers/
