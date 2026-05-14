@@ -39,6 +39,10 @@ final class heedUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["heed/UI/WorkspaceShell.swift"].exists)
         XCTAssertTrue(app.staticTexts["+ terminal tab strip"].exists)
 
+        app.buttons["sidebar-new-session"].click()
+        XCTAssertTrue(app.buttons["record-button"].waitForExistence(timeout: uiTimeout))
+        XCTAssertTrue(app.staticTexts["Press record to begin the full transcript"].waitForExistence(timeout: uiTimeout))
+
         app.buttons["record-button"].click()
 
         XCTAssertTrue(waitForButtonLabel("record-button", label: "Stop", in: app))

@@ -70,18 +70,20 @@ struct WorkspaceShell: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                UtilityRailView(
-                    primaryStatus: utilityPrimaryStatus,
-                    secondaryStatus: utilitySecondaryStatus,
-                    details: utilityDetails,
-                    leadingActions: leadingUtilityActions,
-                    trailingActions: trailingUtilityActions
-                ) {
-                    FloatingTransportView(
-                        recordingState: controller.state,
-                        isEnabled: controller.canRecord,
-                        onPrimaryAction: controller.handlePrimaryAction
-                    )
+                if selectedShellMode == .newSession {
+                    UtilityRailView(
+                        primaryStatus: utilityPrimaryStatus,
+                        secondaryStatus: utilitySecondaryStatus,
+                        details: utilityDetails,
+                        leadingActions: leadingUtilityActions,
+                        trailingActions: trailingUtilityActions
+                    ) {
+                        FloatingTransportView(
+                            recordingState: controller.state,
+                            isEnabled: controller.canRecord,
+                            onPrimaryAction: controller.handlePrimaryAction
+                        )
+                    }
                 }
             }
             .animation(.easeOut(duration: 0.22), value: isSidebarVisible)
@@ -104,6 +106,11 @@ struct WorkspaceShell: View {
             }
             .onChange(of: displayedSession?.status) {
                 taskAnalysisController.updateDisplayedSession(displayedSession)
+            }
+            .onChange(of: taskPrepController.activeTaskID) {
+                if taskPrepController.activeTaskID != nil {
+                    selectedShellMode = .newSession
+                }
             }
             .sheet(isPresented: $isAPIKeySettingsPresented) {
                 APIKeySettingsView(viewModel: apiKeySettingsViewModel) {
