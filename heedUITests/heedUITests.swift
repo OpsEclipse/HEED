@@ -62,6 +62,8 @@ final class heedUITests: XCTestCase {
         let app = launchAppInUITestMode(taskAnalysisMode: "success")
         defer { forceQuitHeed() }
 
+        XCTAssertTrue(app.buttons["sidebar-new-session"].waitForExistence(timeout: uiTimeout))
+        app.buttons["sidebar-new-session"].click()
         XCTAssertTrue(app.buttons["record-button"].waitForExistence(timeout: uiTimeout))
 
         app.buttons["record-button"].click()

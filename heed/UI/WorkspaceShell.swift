@@ -96,6 +96,7 @@ struct WorkspaceShell: View {
             }
             .onAppear {
                 taskAnalysisController.updateDisplayedSession(displayedSession)
+                showNewSessionForActiveTaskPrep()
             }
             .onChange(of: displayedSession?.id) {
                 taskAnalysisController.updateDisplayedSession(displayedSession)
@@ -108,9 +109,7 @@ struct WorkspaceShell: View {
                 taskAnalysisController.updateDisplayedSession(displayedSession)
             }
             .onChange(of: taskPrepController.activeTaskID) {
-                if taskPrepController.activeTaskID != nil {
-                    selectedShellMode = .newSession
-                }
+                showNewSessionForActiveTaskPrep()
             }
             .sheet(isPresented: $isAPIKeySettingsPresented) {
                 APIKeySettingsView(viewModel: apiKeySettingsViewModel) {
@@ -236,7 +235,7 @@ struct WorkspaceShell: View {
     private func selectTerminal(_ terminal: TerminalShellTerminal) {
         terminalWorkspace.selectedTerminalID = terminal.id
         terminalWorkspace.selectedBranchTabID = terminal.id
-        selectedShellMode = .terminal
+        showTerminalModeWhenTaskPrepInactive()
     }
 
     private func selectBranch(_ project: TerminalShellProject, _ branch: TerminalShellBranch) {
@@ -244,7 +243,7 @@ struct WorkspaceShell: View {
         terminalWorkspace.selectedBranchID = branch.id
         selectDefaultTab(in: branch)
         selectDefaultChangedFile(in: branch)
-        selectedShellMode = .terminal
+        showTerminalModeWhenTaskPrepInactive()
     }
 
     private func selectTab(
@@ -255,7 +254,7 @@ struct WorkspaceShell: View {
         terminalWorkspace.selectedProjectID = project.id
         terminalWorkspace.selectedBranchID = branch.id
         terminalWorkspace.selectedBranchTabID = tab.id
-        selectedShellMode = .terminal
+        showTerminalModeWhenTaskPrepInactive()
 
         switch tab.kind {
         case .terminal:
@@ -271,11 +270,26 @@ struct WorkspaceShell: View {
     private func selectTasksTab() {
         guard let branch = terminalWorkspace.selectedBranch,
               let tasksTab = branch.tabs.first(where: { $0.kind == .tasks }) else {
-            selectedShellMode = .terminal
+            showTerminalModeWhenTaskPrepInactive()
             return
         }
 
         terminalWorkspace.selectedBranchTabID = tasksTab.id
+        showTerminalModeWhenTaskPrepInactive()
+    }
+
+    private func showNewSessionForActiveTaskPrep() {
+        if taskPrepController.activeTaskID != nil {
+            selectedShellMode = .newSession
+        }
+    }
+
+    private func showTerminalModeWhenTaskPrepInactive() {
+        guard taskPrepController.activeTaskID == nil else {
+            selectedShellMode = .newSession
+            return
+        }
+
         selectedShellMode = .terminal
     }
 
