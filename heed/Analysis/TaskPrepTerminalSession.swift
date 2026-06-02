@@ -77,19 +77,202 @@ protocol TaskPrepTerminalSessionHandle: AnyObject {
     func stop()
 }
 
+protocol CodexLaunchPreflighting: Sendable {
+    func resolveLaunchArguments(
+        baseArguments: [String],
+        environment: [String: String]
+    ) throws -> [String]
+}
+
+struct CodexLaunchPreflight: CodexLaunchPreflighting {
+    private let fileManager: FileManager
+
+    init(fileManager: FileManager = .default) {
+        self.fileManager = fileManager
+    }
+
+    func resolveLaunchArguments(
+        baseArguments: [String],
+        environment: [String: String]
+    ) throws -> [String] {
+        guard baseArguments.first == "codex" else {
+            return baseArguments
+        }
+
+        var firstFailure: TaskPrepTerminalSessionError?
+        for candidate in Self.commandCandidates(named: "codex", environment: environment, fileManager: fileManager) {
+            do {
+                try validateCodexCandidate(candidate)
+                var resolvedArguments = baseArguments
+                resolvedArguments[0] = candidate.path
+                return resolvedArguments
+            } catch let error as TaskPrepTerminalSessionError {
+                if firstFailure == nil {
+                    firstFailure = error
+                }
+            }
+        }
+
+        if let firstFailure {
+            throw firstFailure
+        }
+
+        throw TaskPrepTerminalSessionError.launchFailed(
+            "Could not find `codex` on PATH. Install the Codex CLI, then retry."
+        )
+    }
+
+    nonisolated static func commandCandidates(
+        named commandName: String,
+        environment: [String: String],
+        fileManager: FileManager = .default
+    ) -> [URL] {
+        let pathEntries = (environment["PATH"] ?? "")
+            .split(separator: ":")
+            .map(String.init)
+
+        var seenPaths = Set<String>()
+        var candidates = [URL]()
+        for pathEntry in pathEntries where !pathEntry.isEmpty {
+            let candidate = URL(fileURLWithPath: pathEntry).appendingPathComponent(commandName)
+            var isDirectory: ObjCBool = false
+            guard fileManager.fileExists(atPath: candidate.path, isDirectory: &isDirectory),
+                  !isDirectory.boolValue,
+                  fileManager.isExecutableFile(atPath: candidate.path) else {
+                continue
+            }
+
+            let resolved = candidate.resolvingSymlinksInPath()
+            guard seenPaths.insert(resolved.path).inserted else {
+                continue
+            }
+            candidates.append(resolved)
+        }
+
+        return candidates
+    }
+
+    private func validateCodexCandidate(_ candidate: URL) throws {
+        guard let contents = try? String(contentsOf: candidate, encoding: .utf8) else {
+            return
+        }
+
+        if contents.localizedCaseInsensitiveContains("Superset wrapper for codex") {
+            throw TaskPrepTerminalSessionError.launchFailed(
+                "`\(candidate.path)` is a wrapper around Codex, not the Codex CLI itself. Put the real Codex CLI earlier on PATH, then retry."
+            )
+        }
+
+        guard contents.contains("@openai/codex") || contents.contains("Unified entry point for the Codex CLI") else {
+            return
+        }
+
+        guard let nativeBinary = nativeBinaryURL(forCodexScript: candidate, contents: contents) else {
+            throw TaskPrepTerminalSessionError.launchFailed(
+                "The local Codex CLI is incomplete. Run `npm install -g @openai/codex@latest`, then retry."
+            )
+        }
+
+        if hasQuarantineAttribute(nativeBinary) {
+            throw TaskPrepTerminalSessionError.launchFailed(
+                "macOS has quarantined the Codex helper at `\(nativeBinary.path)`. Reinstall Codex from a trusted source, then retry."
+            )
+        }
+    }
+
+    private func nativeBinaryURL(forCodexScript scriptURL: URL, contents: String) -> URL? {
+        let packageRoot = scriptURL
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+
+        let targetTriple = Self.currentAppleTargetTriple
+        let binaryName = "codex"
+
+        if contents.contains("PLATFORM_PACKAGE_BY_TARGET") {
+            let scopedPackageRoot = packageRoot
+                .deletingLastPathComponent()
+                .appendingPathComponent(Self.currentApplePlatformPackage)
+            let optionalVendorRoot = scopedPackageRoot.appendingPathComponent("vendor")
+            if let nativeBinary = existingNativeBinary(
+                vendorRoot: optionalVendorRoot,
+                targetTriple: targetTriple,
+                binaryName: binaryName
+            ) {
+                return nativeBinary
+            }
+        }
+
+        return existingNativeBinary(
+            vendorRoot: packageRoot.appendingPathComponent("vendor"),
+            targetTriple: targetTriple,
+            binaryName: binaryName
+        )
+    }
+
+    private func existingNativeBinary(
+        vendorRoot: URL,
+        targetTriple: String,
+        binaryName: String
+    ) -> URL? {
+        let modernBinary = vendorRoot
+            .appendingPathComponent(targetTriple)
+            .appendingPathComponent("bin")
+            .appendingPathComponent(binaryName)
+        if fileManager.isExecutableFile(atPath: modernBinary.path) {
+            return modernBinary
+        }
+
+        let legacyBinary = vendorRoot
+            .appendingPathComponent(targetTriple)
+            .appendingPathComponent("codex")
+            .appendingPathComponent(binaryName)
+        if fileManager.isExecutableFile(atPath: legacyBinary.path) {
+            return legacyBinary
+        }
+
+        return nil
+    }
+
+    private func hasQuarantineAttribute(_ url: URL) -> Bool {
+        let result = url.path.withCString { path in
+            getxattr(path, "com.apple.quarantine", nil, 0, 0, 0)
+        }
+        return result >= 0
+    }
+
+    private nonisolated static var currentAppleTargetTriple: String {
+        #if arch(arm64)
+        return "aarch64-apple-darwin"
+        #else
+        return "x86_64-apple-darwin"
+        #endif
+    }
+
+    private nonisolated static var currentApplePlatformPackage: String {
+        #if arch(arm64)
+        return "codex-darwin-arm64"
+        #else
+        return "codex-darwin-x64"
+        #endif
+    }
+}
+
 struct TaskPrepProcessTerminalSessionLauncher: TaskPrepTerminalSessionLaunching {
     private let executableURL: URL
     private let arguments: [String]
     private let workingDirectoryURL: URL
+    private let preflight: CodexLaunchPreflighting
 
     init(
         executableURL: URL = URL(fileURLWithPath: "/usr/bin/env"),
         arguments: [String] = Self.defaultArguments,
-        workingDirectoryURL: URL = Self.defaultWorkingDirectoryURL
+        workingDirectoryURL: URL = Self.defaultWorkingDirectoryURL,
+        preflight: CodexLaunchPreflighting = CodexLaunchPreflight()
     ) {
         self.executableURL = executableURL
         self.arguments = arguments
         self.workingDirectoryURL = workingDirectoryURL
+        self.preflight = preflight
     }
 
     nonisolated static let defaultArguments = ["codex", "--model", "gpt-5.2-codex", "--no-alt-screen"]
@@ -133,9 +316,14 @@ struct TaskPrepProcessTerminalSessionLauncher: TaskPrepTerminalSessionLaunching 
         let slaveHandle = FileHandle(fileDescriptor: slaveFileDescriptor, closeOnDealloc: true)
 
         process.executableURL = executableURL
-        process.arguments = Self.launchArguments(baseArguments: arguments, prompt: prompt)
+        let environment = Self.terminalEnvironment()
+        let resolvedArguments = try preflight.resolveLaunchArguments(
+            baseArguments: arguments,
+            environment: environment
+        )
+        process.arguments = Self.launchArguments(baseArguments: resolvedArguments, prompt: prompt)
         process.currentDirectoryURL = workingDirectoryURL
-        process.environment = Self.terminalEnvironment()
+        process.environment = environment
         process.standardInput = slaveHandle
         process.standardOutput = slaveHandle
         process.standardError = slaveHandle
@@ -175,11 +363,24 @@ struct TaskPrepProcessTerminalSessionLauncher: TaskPrepTerminalSessionLaunching 
             masterHandle.readabilityHandler = nil
             try? masterHandle.close()
             try? slaveHandle.close()
-            throw TaskPrepTerminalSessionError.launchFailed(error.localizedDescription)
+            if let terminalError = error as? TaskPrepTerminalSessionError {
+                throw terminalError
+            }
+            throw TaskPrepTerminalSessionError.launchFailed(Self.userFacingLaunchMessage(from: error))
         }
 
         let handle = TaskPrepProcessTerminalSessionHandle(process: process, masterHandle: masterHandle)
         return handle
+    }
+
+    private nonisolated static func userFacingLaunchMessage(from error: Error) -> String {
+        let message = error.localizedDescription
+        if message.localizedCaseInsensitiveContains("malware")
+            || message.localizedCaseInsensitiveContains("was not opened") {
+            return "macOS blocked Codex as unsafe. Heed did not bypass that block. Reinstall Codex from a trusted source, then retry."
+        }
+
+        return message
     }
 
     nonisolated static func terminalEnvironment(

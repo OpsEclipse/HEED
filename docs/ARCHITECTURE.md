@@ -70,7 +70,7 @@ The current product pipeline has two big paths.
 9. `OpenAITaskPrepConversationService`
    Uses the Responses API with streaming [a reply that arrives in small pieces over one connection], reuses the previous response ID for follow-up turns, and exposes three local function tools: read-only `get_meeting_transcript`, `update_context_draft`, and guarded `spawn_agent`. If a Composio API key is saved, it creates one Composio Tool Router session [a scoped tool access session] per prep conversation and appends an MCP tool for Gmail, Google Calendar, and Google Drive.
 10. `TaskPrepTerminalSessionLauncher`
-    Builds a compressed Codex prompt from the selected task, stable brief, open questions, transcript evidence, and prep chat, then starts `codex --model gpt-5.2-codex --no-alt-screen` inside a PTY-backed terminal session [a real terminal interface for a child process] in the prep workspace. The compressed prompt is passed as the Codex prompt argument so the app does not need to paste text into the terminal after launch.
+    Builds a compressed Codex prompt from the selected task, stable brief, open questions, transcript evidence, and prep chat, checks that a usable local Codex install exists, then starts `codex --model gpt-5.2-codex --no-alt-screen` inside a PTY-backed terminal session [a real terminal interface for a child process] in the prep workspace. The compressed prompt is passed as the Codex prompt argument so the app does not need to paste text into the terminal after launch.
 11. `WorkspaceShell`
     Shows the transcript-first shell by default, then swaps the main canvas to a split prep workspace while task prep is active.
 12. Export layer
